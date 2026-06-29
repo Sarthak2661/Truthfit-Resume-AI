@@ -1,0 +1,16 @@
+.env
+.streamlit/secrets.toml
+.truthfit/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.log
+streamlit.out.log
+streamlit.err.log
+tmp_streamlit_*.log
+tmp_streamlit_*.out.log
+tmp_streamlit_*.err.log
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

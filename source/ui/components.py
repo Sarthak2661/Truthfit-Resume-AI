@@ -352,7 +352,7 @@ def render_navbar():
         <div class="truthfit-navbar">
             <div>
                 <div class="truthfit-brand">TruthFit <span>Resume AI</span></div>
-                <div class="nav-subtitle">Evidence-based resume tailoring</div>
+                <div class="nav-subtitle">Resume and job-fit review</div>
             </div>
         </div>
         """
@@ -379,17 +379,17 @@ def render_homepage():
         """
         <div class="hero hero-split">
             <div class="hero-copy">
-                <div class="mini-label">AI resume checker and job-fit dashboard</div>
-                <h1>Land cleaner interviews with <span class="gradient-text">truth-safe AI tailoring.</span></h1>
+                <div class="mini-label">Resume checker and job-fit dashboard</div>
+                <h1>See where your resume fits, <span class="gradient-text">and what to fix next.</span></h1>
                 <p>
-                    Upload your resume, paste a job description, and get an evidence-based match score,
-                    ATS keyword coverage, skill gaps, eligibility risks, and safer bullet rewrites based
-                    only on experience already in your resume.
+                    Upload a resume, paste a job description, and get a practical match review:
+                    keyword coverage, skill gaps, eligibility notes, and rewrite ideas grounded in
+                    experience already on the resume.
                 </p>
                 <div class="hero-metrics">
                     <div><strong>5</strong><span>fit scores</span></div>
                     <div><strong>ATS</strong><span>keyword map</span></div>
-                    <div><strong>0</strong><span>made-up claims</span></div>
+                    <div><strong>0</strong><span>unsupported claims</span></div>
                 </div>
             </div>
 
@@ -411,7 +411,7 @@ def render_homepage():
                     <div class="ai-ring">82</div>
                     <div>
                         <strong>Good Match</strong>
-                        <span>Evidence-backed ATS and risk analysis</span>
+                        <span>Keyword and risk review</span>
                     </div>
                 </div>
 
@@ -444,7 +444,7 @@ def render_homepage():
     with c3:
         render_feature_card(
             "Improve",
-            "Get visual scores, safer rewrites, and a focused skill-gap learning plan."
+            "Get visual scores, careful rewrites, and a focused skill-gap learning plan."
         )
 
     st.write("")
@@ -454,13 +454,13 @@ def render_homepage():
         <div class="process-band">
             <div>
                 <span class="step-dot">1</span>
-                <h3>ATS Coverage</h3>
-                <p>Shows covered, partial, and missing keywords without overwhelming tables.</p>
+                <h3>Keyword Coverage</h3>
+                <p>Shows covered, needs-proof, and missing terms without overwhelming tables.</p>
             </div>
             <div>
                 <span class="step-dot">2</span>
-                <h3>Evidence Guardrails</h3>
-                <p>Flags unsupported claims so the tailored resume stays defensible.</p>
+                <h3>Evidence Check</h3>
+                <p>Flags claims that need stronger support before they go on a resume.</p>
             </div>
             <div>
                 <span class="step-dot">3</span>
@@ -1216,30 +1216,3 @@ def render_action_plan(result: dict):
         """
 
     render_html(f'<div class="action-grid">{cards_html}</div>')
-
-
-# -------------------------------------------------
-# Fallback table helper
-# -------------------------------------------------
-
-def render_compact_table(title: str, data: list, columns: list = None, max_rows: int = 10):
-    st.markdown(
-        f'<div class="section-title">{html.escape(title)}</div>',
-        unsafe_allow_html=True
-    )
-
-    if not data:
-        st.info("No data available.")
-        return
-
-    df = pd.DataFrame(data)
-
-    if columns:
-        available = [col for col in columns if col in df.columns]
-        df = df[available]
-
-    st.dataframe(df.head(max_rows), width="stretch", hide_index=True)
-
-    if len(df) > max_rows:
-        with st.expander(f"Show all {len(df)} rows"):
-            st.dataframe(df, width="stretch", hide_index=True)

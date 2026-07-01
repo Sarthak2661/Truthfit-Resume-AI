@@ -34,7 +34,7 @@ You must analyze:
 9. Eligibility risks
 10. Evidence-based matches
 11. Before vs after bullet rewrites
-12. Hallucination guardrail
+12. Unsupported claim check
 13. Resume timeline issues
 14. Resume fix suggestions
 15. JD red flags affecting the candidate

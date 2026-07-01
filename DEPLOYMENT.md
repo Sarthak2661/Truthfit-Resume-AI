@@ -23,7 +23,7 @@ PERPLEXITY_API_KEY = ""
 
 5. Deploy.
 
-For public portfolio use, the safest setup is to avoid hosted keys and let visitors enter their own API key in the sidebar.
+For a public portfolio deployment, the safest setup is to avoid hosted keys and let visitors enter their own API key in the sidebar.
 
 ## Hugging Face Spaces
 
@@ -35,4 +35,4 @@ For public portfolio use, the safest setup is to avoid hosted keys and let visit
 
 ## Privacy
 
-Resume and job description text may be sent to the selected AI provider during live analysis. Do not upload sensitive documents unless you are comfortable sending that content to the selected provider.
+Resume and job description text may be sent to the selected provider during live analysis. Do not upload sensitive documents unless you are comfortable sending that content to the selected provider.

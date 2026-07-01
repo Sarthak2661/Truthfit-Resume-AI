@@ -2,6 +2,7 @@
 .streamlit/secrets.toml
 .truthfit/
 venv/
+.codex-run-venv/
 __pycache__/
 *.pyc
 *.pyo

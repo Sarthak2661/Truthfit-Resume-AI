@@ -1,6 +1,6 @@
 # TruthFit Resume AI
 
-TruthFit Resume AI is an evidence-based resume and job-description analyzer. It scores fit, maps ATS keyword coverage, highlights missing skills, suggests truthful resume improvements, recommends portfolio projects and certifications, drafts outreach content through chat, and includes a lightweight job tracker.
+TruthFit Resume AI is a resume and job-fit dashboard for comparing a resume against a job description. It shows fit scores, ATS keyword coverage, skill gaps, resume rewrite ideas, project and certification suggestions, chat-based follow-up help, and a lightweight job tracker.
 
 ## Screenshots
 
@@ -20,12 +20,12 @@ TruthFit Resume AI is an evidence-based resume and job-description analyzer. It 
 
 - Resume upload for PDF, DOCX, and TXT files
 - Job description upload or paste input
-- Bring-your-own-key AI provider settings for Gemini, Claude, OpenAI, or Perplexity
+- Bring-your-own-key provider settings for Gemini, Claude, OpenAI, or Perplexity
 - No-API demo dashboard for recruiters and reviewers
 - Match scores for overall fit, technical fit, ATS coverage, eligibility, and experience
-- Visual dashboard with keyword, requirement, risk, and evidence views
+- Visual dashboard with keyword, requirement, risk, and evidence sections
 - Project and certification suggestions tied to missing JD evidence
-- Chat assistant for analysis questions, cover letters, cold emails, and rewrite help
+- Chat helper for analysis questions, cover letters, cold emails, and rewrite help
 - Editable job tracker with company, role, link, status, location, salary, and match score
 - PDF report export
 
@@ -77,7 +77,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for Streamlit Cloud and Hugging Face Spaces d
 
 ## Privacy Note
 
-Resume and job-description text may be sent to the selected AI provider for analysis. Do not upload sensitive documents unless you are comfortable sending that content to the provider connected by your API key.
+Resume and job-description text may be sent to the selected provider during live analysis. Do not upload sensitive documents unless you are comfortable sending that content to the provider connected by your API key.
 
 ## Git Hygiene
 

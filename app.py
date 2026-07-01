@@ -29,7 +29,7 @@ styles = importlib.reload(styles)
 inject_global_styles = styles.inject_global_styles
 
 
-APP_BUILD = "portfolio-ui-v3-2026-06-08"
+APP_BUILD = "portfolio-polish-v4-2026-06-29"
 SHOW_DEBUG = False
 
 
@@ -133,7 +133,7 @@ inject_global_styles(st.session_state.theme)
 
 def render_ai_settings():
     with st.sidebar:
-        st.markdown("### AI Provider")
+        st.markdown("### Analysis Provider")
 
         provider = st.selectbox(
             "Provider",
@@ -274,7 +274,7 @@ def show_analyze_page():
             height=160,
             placeholder=(
                 "Optional: paste relevant projects, portfolio notes, or public GitHub links. "
-                "The app will use this as user-provided evidence for project suggestions."
+                "These details are treated as evidence for project suggestions."
             ),
         )
 
@@ -377,7 +377,7 @@ def show_dashboard_page(result_override=None, demo_mode: bool = False):
         (
             "A no-API sample dashboard using synthetic resume and job data."
             if demo_mode
-            else "A visual, evidence-based breakdown of how your resume fits this job."
+            else "A visual breakdown of how your resume fits this job."
         )
     )
 
@@ -600,7 +600,7 @@ def show_dashboard_page(result_override=None, demo_mode: bool = False):
     with tab5:
         ui.render_page_header(
             "Risks",
-            "Eligibility, timeline, and hallucination-risk checks."
+            "Eligibility, timeline, and unsupported-claim checks."
         )
 
         ui.render_risk_cards(result.get("eligibility_risks", []))
@@ -620,12 +620,12 @@ def show_dashboard_page(result_override=None, demo_mode: bool = False):
 
         with r2:
             ui.render_card_grid(
-                title="Hallucination Guardrail",
+                title="Unsupported Claims Check",
                 items=result.get("hallucination_guardrail", []),
                 title_key="claim_or_skill",
                 badge_key="status",
                 body_keys=["evidence", "action"],
-                empty_message="No hallucination risks detected.",
+                empty_message="No unsupported claims detected.",
                 columns=1
             )
 

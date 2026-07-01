@@ -261,14 +261,6 @@ def inject_global_styles(theme: str):
             margin-top:2px;
         }}
 
-        .truthfit-pill {{
-            padding:8px 12px;
-            border-radius:12px;
-            border:1px solid {border};
-            color:{muted};
-            font-size:14px;
-        }}
-
         .page-header {{
             margin-top:18px;
             margin-bottom:22px;

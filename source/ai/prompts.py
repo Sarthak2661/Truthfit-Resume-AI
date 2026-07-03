@@ -43,6 +43,8 @@ You must analyze:
 18. ATS score breakdown
 19. Project suggestions based on missing role evidence
 20. Certification suggestions based on missing role evidence
+21. Score drivers explaining what increases or lowers the match score
+22. Top fixes with impact and effort
 
 Candidate-provided project evidence:
 {user_projects if user_projects.strip() else "No extra project evidence provided."}
@@ -58,6 +60,11 @@ Evidence status:
 - Partial: related evidence exists, but exact requirement is not clearly shown
 - Missing: not found
 - Unsafe: generated content would likely be hallucinated
+
+Action level labels:
+- Important: required, blocking, or highly relevant
+- Would help: useful gap to improve but not necessarily blocking
+- Nice to have: optional or secondary
 
 JD red flags to detect:
 - Visa restriction
@@ -82,6 +89,9 @@ Strict output rules:
 - For multi-part values, use concise plain sentences separated by semicolons, not nested JSON and not HTML labels like <div class="info-row">.
 - Every matched skill must include evidence.
 - Every rewritten bullet must include evidence status.
+- Every major finding must include confidence, resume evidence, JD evidence, manual verification guidance, and risk.
+- If resume evidence is missing, write "Not found in resume." Do not infer experience from related skills.
+- If JD evidence is missing, write "Not found in job description."
 - Missing skills must not be added into rewritten bullets unless they are clearly supported.
 - For human-facing recommendation text, avoid raw severity words like high, medium, and low.
   Use "important", "would help", and "nice to have" where natural.
@@ -139,7 +149,7 @@ Return this exact JSON structure:
       {{
         "requirement": "",
         "status": "Supported | Partial | Missing",
-        "priority": "High | Medium | Low",
+        "priority": "Important | Would help | Nice to have",
         "resume_evidence": "",
         "recommendation": ""
       }}
@@ -148,7 +158,7 @@ Return this exact JSON structure:
       {{
         "requirement": "",
         "status": "Supported | Partial | Missing",
-        "priority": "High | Medium | Low",
+        "priority": "Important | Would help | Nice to have",
         "resume_evidence": "",
         "recommendation": ""
       }}
@@ -175,7 +185,7 @@ Return this exact JSON structure:
       {{
         "skill": "",
         "category": "",
-        "priority": "High | Medium | Low",
+        "priority": "Important | Would help | Nice to have",
         "reason": ""
       }}
     ],
@@ -191,7 +201,7 @@ Return this exact JSON structure:
   "ats_keyword_coverage": [
     {{
       "keyword": "",
-      "importance": "High | Medium | Low",
+      "importance": "Important | Would help | Nice to have",
       "found_in_resume": true,
       "coverage_status": "Covered | Partial | Missing",
       "resume_evidence": ""
@@ -204,6 +214,35 @@ Return this exact JSON structure:
       "status": "Strong | Partial | Weak",
       "evidence": "",
       "recommendation": ""
+    }}
+  ],
+  "score_drivers": [
+    {{
+      "driver": "",
+      "contribution": 0,
+      "direction": "Positive | Negative",
+      "evidence": ""
+    }}
+  ],
+  "confidence_findings": [
+    {{
+      "finding": "",
+      "confidence": "High | Medium | Low",
+      "resume_evidence": "",
+      "jd_evidence": "",
+      "risk": "Low | Medium | High",
+      "recommendation": "",
+      "verify_manually": ""
+    }}
+  ],
+  "fix_impact_matrix": [
+    {{
+      "fix": "",
+      "impact": "High | Medium | Low",
+      "effort": "High | Medium | Low",
+      "priority": "Important | Would help | Nice to have",
+      "why_it_matters": "",
+      "source": "Resume Fix | Skill Gap | Risk | Requirement"
     }}
   ],
   "eligibility_risks": [
@@ -254,13 +293,13 @@ Return this exact JSON structure:
       "issue": "",
       "why_it_matters": "",
       "suggested_fix": "",
-      "priority": "High | Medium | Low"
+      "priority": "Important | Would help | Nice to have"
     }}
   ],
   "skill_gap_learning_plan": [
     {{
       "skill": "",
-      "priority": "High | Medium | Low",
+      "priority": "Important | Would help | Nice to have",
       "why_needed": "",
       "learning_action": "",
       "mini_project_idea": ""
@@ -273,7 +312,7 @@ Return this exact JSON structure:
       "why_it_helps": "",
       "suggested_scope": "",
       "resume_bullet_example": "",
-      "priority": "High | Medium | Low"
+      "priority": "Important | Would help | Nice to have"
     }}
   ],
   "certification_suggestions": [
@@ -281,7 +320,7 @@ Return this exact JSON structure:
       "certification": "",
       "target_gap": "",
       "why_it_helps": "",
-      "priority": "High | Medium | Low",
+      "priority": "Important | Would help | Nice to have",
       "estimated_effort": ""
     }}
   ],

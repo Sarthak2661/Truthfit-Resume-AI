@@ -164,3 +164,23 @@ def new_job_from_analysis(result: dict) -> dict:
         "Priority": _priority_from_analysis(result),
         "Notes": _notes_from_analysis(result),
     }
+
+
+def upsert_job_from_analysis(df: pd.DataFrame, result: dict) -> tuple[pd.DataFrame, str]:
+    current_df = normalize_tracker_df(df)
+    new_row = new_job_from_analysis(result)
+
+    match_mask = (
+        (current_df["Company"].astype(str).str.lower() == str(new_row["Company"]).lower())
+        & (current_df["Role"].astype(str).str.lower() == str(new_row["Role"]).lower())
+    ) if not current_df.empty else pd.Series([], dtype=bool)
+
+    if not current_df.empty and match_mask.any():
+        current_df.loc[match_mask, TRACKER_COLUMNS] = [new_row[column] for column in TRACKER_COLUMNS]
+        return current_df[TRACKER_COLUMNS], "Updated current role in the job tracker."
+
+    updated_df = pd.concat(
+        [current_df, pd.DataFrame([new_row])],
+        ignore_index=True,
+    )[TRACKER_COLUMNS]
+    return updated_df, "Added current analysis to the job tracker."

@@ -1,0 +1,36 @@
+Data Engineer
+Northstar Analytics
+Hybrid - New York, NY
+Salary: $105,000 - $135,000
+
+About the Role
+Northstar Analytics is hiring a Data Engineer to build reliable data pipelines,
+support analytics-ready datasets, and improve operational visibility across product,
+finance, and risk teams.
+
+Responsibilities
+- Build and maintain batch and streaming data pipelines using Python and SQL.
+- Design PostgreSQL data models for reporting, validation, and analytics workflows.
+- Develop real-time ingestion pipelines using Kafka or similar messaging systems.
+- Add data-quality checks, rejected-record handling, and monitoring for pipeline health.
+- Create dashboards that help business and operations teams understand data freshness,
+  processing volume, latency, and error trends.
+- Work with analysts and engineers to document pipeline behavior and data definitions.
+
+Required Qualifications
+- 3+ years of experience with data engineering, analytics engineering, or backend data systems.
+- Strong Python and SQL skills.
+- Experience with PostgreSQL or another relational database.
+- Experience building dashboards or operational reporting views.
+- Experience with Docker or containerized development workflows.
+
+Nice to Have
+- Kafka or streaming-data experience.
+- Cloud deployment experience on AWS, Azure, or GCP.
+- Workflow orchestration experience with Airflow, Prefect, Dagster, or similar tools.
+- Exposure to fraud, payments, financial data, or risk analytics.
+
+Application Notes
+Candidates should show concrete project or work evidence for data pipelines,
+database design, monitoring, and dashboarding. Cloud and orchestration experience
+are helpful but not mandatory.

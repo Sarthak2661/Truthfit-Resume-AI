@@ -1,5 +1,6 @@
 # TruthFit Resume AI
 
+[![Tests](https://github.com/Sarthak2661/Truthfit-Resume-AI/actions/workflows/tests.yml/badge.svg)](https://github.com/Sarthak2661/Truthfit-Resume-AI/actions/workflows/tests.yml)
 [![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://truthfit-resume-ai-vaos6czappyfazhugbyffub.streamlit.app/)
 
 **Live app:** https://truthfit-resume-ai-vaos6czappyfazhugbyffub.streamlit.app/
@@ -12,15 +13,35 @@ The goal is not to "game" an ATS or invent stronger experience. TruthFit is buil
 
 | Home | Analyze | Overview |
 | --- | --- | --- |
-| ![Landing](resources/landing.png) | ![Analyze](resources/analyze.png) | ![Dashboard](resources/dashboard.png) |
+| ![Landing](resources/landing.png)<br><sub>Landing page with provider settings, theme toggle, and product overview.</sub> | ![Analyze](resources/analyze.png)<br><sub>Privacy-first upload flow for resume, job description, job link, and project notes.</sub> | ![Dashboard](resources/dashboard.png)<br><sub>Overview tab with scores, privacy note, verdict, score drivers, and top fixes.</sub> |
 
 | Skills & Requirements | Evidence & Risks | Improve Resume |
 | --- | --- | --- |
-| ![Skills and Requirements](resources/skills-requirements.png) | ![Evidence and Risks](resources/evidence-risks.png) | ![Improve Resume](resources/improve-resume.png) |
+| ![Skills and Requirements](resources/skills-requirements.png)<br><sub>Matched and missing skills, role details, and requirement-level evidence.</sub> | ![Evidence and Risks](resources/evidence-risks.png)<br><sub>Proof checks, unsupported claims, eligibility risks, and optional resume proof map.</sub> | ![Improve Resume](resources/improve-resume.png)<br><sub>Editable resume summary, rewrites, fixes, projects, certifications, and learning ideas.</sub> |
 
 | Export & Track | Job Tracker |
 | --- | --- |
-| ![Export and Track](resources/export-track.png) | ![Job Tracker](resources/tracker.png) |
+| ![Export and Track](resources/export-track.png)<br><sub>PDF export, original posting link, and shortcut into job tracking.</sub> | ![Job Tracker](resources/tracker.png)<br><sub>Local tracker for role, company, link, status, salary expectation, score, priority, and notes.</sub> |
+
+## Architecture
+
+```mermaid
+flowchart LR
+    A["Resume file<br>PDF / DOCX / TXT"] --> B["Loaders"]
+    C["Job description<br>file, paste, or link"] --> B
+    D["Project notes or GitHub links"] --> E["Prompt Builder"]
+    B --> F["Privacy Redaction"]
+    F --> E
+    E --> G["Provider Client<br>Gemini / Claude / OpenAI / Perplexity"]
+    G --> H["Structured Analysis JSON"]
+    H --> I["Normalization and Evidence Scoring"]
+    I --> J["Dashboard Sections"]
+    I --> K["PDF Report"]
+    I --> L["Local Job Tracker"]
+    M["No-API Sample Report"] --> J
+```
+
+TruthFit keeps the product split simple: loaders extract text, privacy redaction removes detected personal details, provider clients return structured analysis, and the UI renders the result as scores, tables, proof checks, resume improvements, export, and tracking.
 
 ## What It Does
 
@@ -31,6 +52,8 @@ The goal is not to "game" an ATS or invent stronger experience. TruthFit is buil
 - Generate a structured job-fit report with scores, evidence, risks, and action items.
 - Use a no-API sample report so reviewers can explore the product without adding an API key.
 - Track job applications with company, role, link, status, location, salary expectation, match score, priority, and notes.
+
+Safe demo inputs are included in [`samples/sample_resume.txt`](samples/sample_resume.txt) and [`samples/sample_job_description.txt`](samples/sample_job_description.txt). They are fictional and safe to use when testing the deployed app.
 
 ## Core Features
 
@@ -63,6 +86,19 @@ The dashboard shows:
 - eligibility fit
 - experience fit
 - score drivers that explain what raised or lowered the final score
+
+## How Scoring Works
+
+TruthFit uses structured model output plus local normalization checks. The score is not a real ATS simulation; it is a transparent review score designed to show fit, risk, and evidence quality.
+
+- **Overall match** summarizes the role fit after technical skills, keyword coverage, experience, eligibility, and proof quality are considered.
+- **Technical match** checks whether the resume supports the tools, systems, and workflows requested in the job description.
+- **ATS coverage** measures keyword and requirement coverage, but it does not claim to reproduce any employer's ATS.
+- **Resume evidence proof** checks whether important claims are backed by work, project, tool, metric, education, or certification evidence.
+- **Eligibility and experience** flag location, authorization, salary, years-of-experience, or must-have requirement risks when the JD makes them visible.
+- **Score drivers** explain what raised or lowered the final score so the result does not feel like a black box.
+
+The prompt requires the model to write "Not found in resume" when evidence is missing. The UI also shows confidence, resume evidence, JD evidence, and what should be verified manually for major findings.
 
 ### Skills and Requirements Review
 
@@ -158,6 +194,8 @@ PERPLEXITY_API_KEY=your_perplexity_api_key_here
 ```bash
 streamlit run app.py
 ```
+
+Runtime dependencies in `requirements.txt` and test dependencies in `requirements-dev.txt` are pinned to exact versions for repeatable local and cloud deployment.
 
 ## Tests
 

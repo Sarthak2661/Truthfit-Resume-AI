@@ -1,0 +1,41 @@
+Jordan Patel
+Data Engineering Candidate
+Portfolio: https://github.com/example/truthfit-demo
+Location: Remote
+
+Professional Summary
+Data engineering candidate with hands-on project experience in Python, SQL, PostgreSQL,
+Kafka, Docker, Streamlit, Power BI, and data-quality workflows. Built portfolio projects
+covering fraud analytics, real-time transaction streaming, and distributed server monitoring.
+
+Technical Skills
+Programming: Python, SQL, Go
+Data Stores: PostgreSQL, InfluxDB
+Streaming and Messaging: Kafka, NATS
+Analytics and Reporting: Power BI, Streamlit, Grafana
+Engineering: Docker, data validation, event processing, rejected-record handling
+
+Projects
+Banking Fraud Detection Analytics Platform
+- Designed a fraud analytics platform that helps financial teams prioritize suspicious
+  transactions using SQL transformations, behavioral risk features, machine-learning
+  classification, and investigation dashboards.
+- Built PostgreSQL models for transaction, customer, merchant, and risk-feature tables.
+- Created Power BI and Streamlit dashboards for suspicious transaction review.
+
+Real-Time Credit Card Transaction Streaming Pipeline
+- Built a streaming transaction pipeline with Kafka producers and consumers.
+- Added event validation, rejected-record handling, PostgreSQL loading, and Grafana
+  dashboards for ingestion volume, latency, error rate, and pipeline health.
+- Containerized the pipeline with Docker for repeatable local deployment.
+
+Distributed Server Monitoring System
+- Built a producer/consumer monitoring system in Go using NATS and InfluxDB.
+- Streamed CPU, memory, uptime, and service-health metrics into time-series storage.
+- Added dashboards to support proactive issue detection across containerized services.
+
+Education
+Master of Science in Computer Science
+
+Certifications
+AWS Cloud Fundamentals

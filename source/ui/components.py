@@ -354,12 +354,6 @@ def render_navbar():
         st.session_state.page = "Home"
         st.rerun()
 
-    render_html(
-        """
-        <div class="nav-subtitle brand-subtitle">Resume and job-fit review</div>
-        """
-    )
-
 
 # -------------------------------------------------
 # Home page

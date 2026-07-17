@@ -4,19 +4,23 @@ import streamlit as st
 def inject_global_styles(theme: str):
     is_dark = theme == "Dark"
 
-    bg = "#08111F" if is_dark else "#F8FAFC"
-    card = "#111C2E" if is_dark else "#FFFFFF"
-    card_2 = "#0C1728" if is_dark else "#EEF6FF"
-    text = "#F8FAFC" if is_dark else "#0F172A"
-    muted = "#A7B4C7" if is_dark else "#52627A"
-    border = "#24344D" if is_dark else "#D9E4F2"
-    primary = "#2563EB"
-    accent = "#14B8A6"
-    input_bg = "#0B1526" if is_dark else "#FFFFFF"
-    input_text = "#F8FAFC" if is_dark else "#0F172A"
-    soft_panel = "rgba(17,28,46,0.86)" if is_dark else "rgba(255,255,255,0.96)"
-    nav_bg = "#0D182A" if is_dark else "#FFFFFF"
-    shadow = "0 18px 48px rgba(0,0,0,0.24)" if is_dark else "0 18px 48px rgba(15,23,42,0.09)"
+    bg = "#070A12" if is_dark else "#F6F8FC"
+    card = "#101828" if is_dark else "#FFFFFF"
+    card_2 = "#172033" if is_dark else "#EEF3FF"
+    text = "#F8FAFC" if is_dark else "#111827"
+    muted = "#A7B2C7" if is_dark else "#5B6475"
+    border = "#2B3752" if is_dark else "#D8E0EE"
+    primary = "#7C8CFF" if is_dark else "#355CFF"
+    accent = "#35D6C6" if is_dark else "#0EA5A3"
+    warm = "#FFB454" if is_dark else "#F97316"
+    input_bg = "#0B1220" if is_dark else "#FFFFFF"
+    input_text = "#F8FAFC" if is_dark else "#111827"
+    soft_panel = "rgba(16,24,40,0.88)" if is_dark else "rgba(255,255,255,0.94)"
+    nav_bg = "#0D1526" if is_dark else "#FFFFFF"
+    shadow = "0 22px 58px rgba(0,0,0,0.38)" if is_dark else "0 20px 50px rgba(31,41,55,0.11)"
+    primary_glow = "rgba(124,140,255,0.18)" if is_dark else "rgba(53,92,255,0.10)"
+    accent_glow = "rgba(53,214,198,0.13)" if is_dark else "rgba(14,165,163,0.10)"
+    warm_glow = "rgba(255,180,84,0.12)" if is_dark else "rgba(249,115,22,0.08)"
 
     st.markdown(
         f"""
@@ -28,8 +32,9 @@ def inject_global_styles(theme: str):
 
         .stApp {{
             background:
-                radial-gradient(circle at top left, rgba(37,99,235,0.16), transparent 30%),
-                radial-gradient(circle at top right, rgba(20,184,166,0.15), transparent 28%),
+                radial-gradient(circle at top left, {primary_glow}, transparent 30%),
+                radial-gradient(circle at top right, {accent_glow}, transparent 28%),
+                radial-gradient(circle at 70% 85%, {warm_glow}, transparent 26%),
                 {bg};
             color:{text};
         }}
@@ -71,15 +76,21 @@ def inject_global_styles(theme: str):
             border:1px solid {border} !important;
             color:{input_text} !important;
             background:{nav_bg} !important;
-            box-shadow:0 10px 24px rgba(15,23,42,0.10);
+            box-shadow:0 8px 20px {"rgba(0,0,0,0.20)" if is_dark else "rgba(31,41,55,0.08)"};
             white-space:nowrap !important;
+        }}
+
+        .stButton button[kind="secondary"] {{
+            background:{"#111A2D" if is_dark else "#FFFFFF"} !important;
+            color:{text} !important;
+            border-color:{border} !important;
         }}
 
         .stButton button[kind="primary"],
         .stDownloadButton button[kind="primary"] {{
             background:linear-gradient(135deg, {primary}, {accent}) !important;
             border-color:transparent !important;
-            color:white !important;
+            color:#FFFFFF !important;
         }}
 
         .stButton button:hover,
@@ -221,7 +232,7 @@ def inject_global_styles(theme: str):
         textarea:focus,
         input:focus {{
             border-color:{primary} !important;
-            box-shadow:0 0 0 1px rgba(37,99,235,0.28) !important;
+            box-shadow:0 0 0 1px {primary_glow} !important;
             outline:none !important;
         }}
 
@@ -244,26 +255,12 @@ def inject_global_styles(theme: str):
             box-shadow:{shadow};
         }}
 
-        [data-testid="stElementContainer"]:has(.st-key-brand_home_button) {{
-            padding:16px 18px 0;
+        .st-key-brand_home_button {{
+            padding:20px 26px;
             border:1px solid {border};
-            border-bottom:0;
-            border-radius:18px;
-            border-bottom-left-radius:0;
-            border-bottom-right-radius:0;
+            border-radius:24px;
             background:{soft_panel};
             backdrop-filter:blur(18px);
-            box-shadow:{shadow};
-        }}
-
-        .brand-subtitle {{
-            padding:0 18px 16px;
-            border:1px solid {border};
-            border-top:0;
-            border-radius:0 0 18px 18px;
-            background:{soft_panel};
-            backdrop-filter:blur(18px);
-            margin-top:-18px;
             margin-bottom:18px;
             box-shadow:{shadow};
         }}
@@ -275,16 +272,22 @@ def inject_global_styles(theme: str):
             min-height:auto !important;
             padding:0 !important;
             color:{text} !important;
-            font-size:22px !important;
+            font-size:clamp(30px, 4vw, 52px) !important;
             font-weight:900 !important;
             letter-spacing:0 !important;
             line-height:1.2 !important;
             text-align:left !important;
             justify-content:flex-start !important;
+            width:100% !important;
         }}
 
-        .st-key-brand_home_button button::first-letter {{
-            color:{text} !important;
+        .st-key-brand_home_button button p {{
+            font-size:clamp(30px, 4vw, 52px) !important;
+            line-height:1.05 !important;
+            margin:0 !important;
+            background:linear-gradient(90deg, {text} 0%, {primary} 58%, {accent} 100%);
+            -webkit-background-clip:text;
+            -webkit-text-fill-color:transparent;
         }}
 
         .st-key-brand_home_button button:hover {{
@@ -297,18 +300,12 @@ def inject_global_styles(theme: str):
         .truthfit-brand {{
             font-size:22px;
             font-weight:900;
-            letter-spacing:-0.02em;
+            letter-spacing:0;
             color:{text};
         }}
 
         .truthfit-brand span {{
             color:{primary};
-        }}
-
-        .nav-subtitle {{
-            color:{muted};
-            font-size:13px;
-            margin-top:2px;
         }}
 
         .page-header {{
@@ -320,7 +317,7 @@ def inject_global_styles(theme: str):
             font-size:34px;
             line-height:1.15;
             margin:0 0 8px;
-            letter-spacing:-0.025em;
+            letter-spacing:0;
         }}
 
         .page-header p {{
@@ -333,7 +330,7 @@ def inject_global_styles(theme: str):
         .section-title {{
             font-size:28px;
             font-weight:900;
-            letter-spacing:-0.025em;
+            letter-spacing:0;
             margin-top:30px;
             margin-bottom:18px;
             color:{text};
@@ -372,7 +369,7 @@ def inject_global_styles(theme: str):
         }}
 
         .gradient-text {{
-            background:linear-gradient(90deg, {primary}, {accent});
+            background:linear-gradient(90deg, {primary}, {accent}, {warm});
             -webkit-background-clip:text;
             -webkit-text-fill-color:transparent;
         }}
@@ -382,7 +379,7 @@ def inject_global_styles(theme: str):
             border:1px solid {border};
             border-radius:26px;
             background:
-                linear-gradient(135deg, rgba(37,99,235,0.14), rgba(20,184,166,0.10)),
+                linear-gradient(135deg, {primary_glow}, {accent_glow} 52%, {warm_glow}),
                 {card};
             box-shadow:{shadow};
             animation:fadeInUp 0.5s ease;
@@ -391,7 +388,7 @@ def inject_global_styles(theme: str):
         .hero h1 {{
             font-size:60px;
             line-height:1.03;
-            letter-spacing:-0.04em;
+            letter-spacing:0;
             margin:0 0 18px;
             color:{text};
         }}
@@ -448,7 +445,7 @@ def inject_global_styles(theme: str):
             border:1px solid {border};
             border-radius:22px;
             background:
-                linear-gradient(145deg, rgba(20,184,166,0.16), rgba(37,99,235,0.12)),
+                linear-gradient(145deg, {accent_glow}, {primary_glow}),
                 {card_2};
             overflow:hidden;
             box-shadow:{shadow};
@@ -500,8 +497,8 @@ def inject_global_styles(theme: str):
             height:28px;
             flex:1;
             border-radius:999px;
-            background:rgba(20,184,166,0.18);
-            border:1px solid rgba(20,184,166,0.30);
+            background:{accent_glow};
+            border:1px solid {border};
         }}
 
         .ai-panel {{
@@ -630,7 +627,7 @@ def inject_global_styles(theme: str):
         .keyword-card:hover,
         .action-card:hover {{
             transform:translateY(-2px);
-            border-color:rgba(37,99,235,0.62);
+            border-color:{primary};
         }}
 
         .feature-card h3 {{
@@ -671,7 +668,7 @@ def inject_global_styles(theme: str):
             padding:28px;
             border-radius:22px;
             background:
-                linear-gradient(135deg, rgba(37,99,235,0.16), rgba(20,184,166,0.10)),
+                linear-gradient(135deg, {primary_glow}, {accent_glow}, {warm_glow}),
                 {card};
         }}
 
@@ -1269,10 +1266,25 @@ def inject_global_styles(theme: str):
         .stTabs [data-baseweb="tab"] {{
             border-radius:12px;
             padding:10px 18px;
-            background:{card};
+            background:{nav_bg};
             border:1px solid {border};
             font-size:15px;
             font-weight:800;
+            color:{text};
+        }}
+
+        .stTabs [data-baseweb="tab"][aria-selected="true"] {{
+            background:linear-gradient(135deg, {primary}, {accent});
+            border-color:transparent;
+            color:#FFFFFF;
+        }}
+
+        .stTabs [data-baseweb="tab"][aria-selected="true"] p {{
+            color:#FFFFFF !important;
+        }}
+
+        .stTabs [data-baseweb="tab-highlight"] {{
+            display:none;
         }}
 
         .resume-heatmap-panel {{

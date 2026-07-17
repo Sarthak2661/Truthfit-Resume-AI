@@ -350,14 +350,13 @@ def render_section_kicker(title: str):
 
 
 def render_navbar():
+    if st.button("TruthFit Resume AI", key="brand_home_button", help="Go to homepage"):
+        st.session_state.page = "Home"
+        st.rerun()
+
     render_html(
         """
-        <div class="truthfit-navbar">
-            <div>
-                <div class="truthfit-brand">TruthFit <span>Resume AI</span></div>
-                <div class="nav-subtitle">Resume and job-fit review</div>
-            </div>
-        </div>
+        <div class="nav-subtitle brand-subtitle">Resume and job-fit review</div>
         """
     )
 
@@ -576,7 +575,7 @@ def render_analysis_disclaimer():
         <div class="tf-card">
             <div class="mini-label">Accuracy Note</div>
             <p>
-                This analysis is AI-assisted and may be incomplete. Use it as a resume review aid,
+                This review is automated and may be incomplete. Use it as a resume review aid,
                 not as a hiring decision or guaranteed ATS result.
             </p>
         </div>
@@ -584,14 +583,112 @@ def render_analysis_disclaimer():
     )
 
 
+def render_privacy_notice():
+    render_html(
+        """
+        <div class="tf-card privacy-card">
+            <div class="mini-label">Privacy-First Mode</div>
+            <h3>Personal details are removed before analysis.</h3>
+            <p>
+                TruthFit redacts detected names, phone numbers, emails, URLs, and street-style addresses
+                before sending resume text to the selected AI provider. Uploaded resume and JD files are
+                not saved by this app; only the current session text is used for analysis.
+            </p>
+            <p class="privacy-card-note">
+                Provider note: live AI calls still go to the provider you choose, so avoid uploading
+                sensitive documents unless you are comfortable with that provider's data policy.
+            </p>
+        </div>
+        """
+    )
+
+
+def render_resume_evidence_score(evidence_summary: dict):
+    if not evidence_summary:
+        return
+
+    score = int(evidence_summary.get("score", 0) or 0)
+    supported = int(evidence_summary.get("supported", 0) or 0)
+    partial = int(evidence_summary.get("partial", 0) or 0)
+    missing = int(evidence_summary.get("missing", 0) or 0)
+    unsafe = int(evidence_summary.get("unsafe", 0) or 0)
+    top_gaps = evidence_summary.get("top_gaps", [])
+
+    if score >= 80:
+        score_label = "Strong proof"
+        chip_class = "chip-green"
+    elif score >= 60:
+        score_label = "Needs clearer proof"
+        chip_class = "chip-yellow"
+    else:
+        score_label = "Evidence is thin"
+        chip_class = "chip-red"
+
+    gap_rows = ""
+    for item in top_gaps[:4]:
+        if not isinstance(item, dict):
+            continue
+
+        gap_rows += f"""
+        <tr>
+            <td>{html.escape(clean_value(item.get("claim", "")))}</td>
+            <td><span class="chip {status_to_chip_class(item.get("status", ""))}">{html.escape(clean_value(item.get("status", "")))}</span></td>
+            <td>{html.escape(clean_value(item.get("evidence", "")) or "Not found in resume.")}</td>
+            <td>{html.escape(clean_value(item.get("recommendation", "")) or "Verify before editing.")}</td>
+        </tr>
+        """
+
+    table_html = (
+        f"""
+        <div class="evidence-proof-table-wrap">
+            <table class="evidence-proof-table">
+                <thead>
+                    <tr>
+                        <th>Claim</th>
+                        <th>Status</th>
+                        <th>Resume Evidence</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>{gap_rows}</tbody>
+            </table>
+        </div>
+        """
+        if gap_rows
+        else "<p>No major unsupported resume claims were detected.</p>"
+    )
+
+    render_html(
+        f"""
+        <div class="tf-card evidence-proof-card">
+            <div class="evidence-proof-top">
+                <div>
+                    <div class="mini-label">Resume Evidence Score</div>
+                    <h3>{score}/100</h3>
+                    <p>Measures whether claims are backed by concrete resume proof, not just ATS keyword matches.</p>
+                </div>
+                <span class="chip {chip_class}">{html.escape(score_label)}</span>
+            </div>
+            <div class="evidence-proof-metrics">
+                <span><strong>{supported}</strong> Supported</span>
+                <span><strong>{partial}</strong> Partial</span>
+                <span><strong>{missing}</strong> Missing</span>
+                <span><strong>{unsafe}</strong> Unsafe</span>
+            </div>
+            {table_html}
+        </div>
+        """
+    )
+
+
 def render_confidence_findings(findings: list, max_items: int = 5):
     st.markdown(
-        '<div class="section-title">Confidence and Evidence Check</div>',
+        '<div class="section-title">Proof Check</div>',
         unsafe_allow_html=True
     )
 
     if not findings:
-        st.info("No confidence findings returned.")
+        st.info("No proof checks available.")
         return
 
     cards_html = ""
@@ -618,7 +715,7 @@ def render_confidence_findings(findings: list, max_items: int = 5):
                 <span class="chip {chip_class}">{html.escape(risk_display)} Risk</span>
             </div>
             <div class="modern-info-row">
-                <span>Confidence</span>
+                <span>Review Confidence</span>
                 <div>{html.escape(confidence_display)}</div>
             </div>
             <details class="evidence-detail">
@@ -647,7 +744,7 @@ def render_confidence_findings(findings: list, max_items: int = 5):
     render_html(f'<div class="card-grid">{cards_html}</div>')
 
     if len(findings) > max_items:
-        with st.expander(f"Show {len(findings) - max_items} more confidence findings"):
+        with st.expander(f"Show {len(findings) - max_items} more proof checks"):
             for item in findings[max_items:]:
                 st.json(item)
 
@@ -763,6 +860,108 @@ def render_skill_match_table(skills: dict, ats_keywords: list):
     )
 
 
+def render_resume_heatmap(heatmap: dict):
+    st.markdown(
+        '<div class="section-title">Resume Proof Map</div>',
+        unsafe_allow_html=True
+    )
+
+    if not heatmap or not heatmap.get("lines"):
+        st.info("No resume heatmap data available yet.")
+        return
+
+    summary = heatmap.get("summary", {})
+    metric_cols = st.columns(4, gap="small")
+
+    metrics = [
+        ("Highlighted Lines", summary.get("highlighted_lines", 0), "Resume lines with JD signal"),
+        ("Covered Keywords", summary.get("covered_keywords", 0), "Directly supported terms"),
+        ("Needs Proof", summary.get("partial_keywords", 0), "Partial keyword evidence"),
+        ("Missing Keywords", summary.get("missing_keywords", 0), "Not found in resume"),
+    ]
+
+    for column, (title, value, subtitle) in zip(metric_cols, metrics):
+        with column:
+            render_summary_card(title, str(value), subtitle)
+
+    legend_html = """
+    <div class="heatmap-legend">
+        <span><i class="heat-covered"></i>Strong resume/JD match</span>
+        <span><i class="heat-partial"></i>Needs clearer proof</span>
+        <span><i class="heat-neutral"></i>Neutral text</span>
+    </div>
+    """
+
+    lines_html = ""
+
+    for item in heatmap.get("lines", [])[:90]:
+        text = clean_value(item.get("text", ""))
+        status = clean_value(item.get("status", "neutral"))
+        score = int(item.get("score", 0) or 0)
+        keywords = item.get("matched_keywords", [])
+        keyword_label = ", ".join([clean_value(keyword) for keyword in keywords if clean_value(keyword)])
+        css_class = {
+            "covered": "heat-line-covered",
+            "partial": "heat-line-partial",
+        }.get(status, "heat-line-neutral")
+
+        keyword_html = (
+            f'<span class="heat-keywords">{html.escape(keyword_label)}</span>'
+            if keyword_label
+            else ""
+        )
+
+        lines_html += f"""
+        <div class="heatmap-line {css_class}" style="--heat:{max(0.06, score / 100):.2f}">
+            <span class="heatmap-text">{html.escape(text)}</span>
+            {keyword_html}
+        </div>
+        """
+
+    missing = heatmap.get("missing_keywords", [])
+    partial = heatmap.get("partial_keywords", [])
+    recommendations = heatmap.get("recommendations", [])
+
+    side_html = ""
+
+    if missing:
+        side_html += "<div class='heatmap-side-block'><h4>Missing Keywords</h4>"
+        side_html += "".join(f"<span class='chip chip-red'>{html.escape(clean_value(item))}</span>" for item in missing[:12])
+        side_html += "</div>"
+
+    if partial:
+        side_html += "<div class='heatmap-side-block'><h4>Needs More Proof</h4>"
+        side_html += "".join(f"<span class='chip chip-yellow'>{html.escape(clean_value(item))}</span>" for item in partial[:12])
+        side_html += "</div>"
+
+    if recommendations:
+        side_html += "<div class='heatmap-side-block'><h4>Analyzer Notes</h4><ul>"
+        side_html += "".join(f"<li>{html.escape(clean_value(item))}</li>" for item in recommendations[:4])
+        side_html += "</ul></div>"
+
+    strongest_sections = summary.get("strongest_sections", [])
+    if strongest_sections:
+        side_html += "<div class='heatmap-side-block'><h4>Strongest Sections</h4>"
+        side_html += "".join(f"<span class='chip chip-green'>{html.escape(clean_value(item))}</span>" for item in strongest_sections[:5])
+        side_html += "</div>"
+
+    render_html(
+        f"""
+        <div class="resume-heatmap-panel">
+            {legend_html}
+            <div class="resume-heatmap-grid">
+                <div class="resume-heatmap-page" aria-label="Redacted resume heatmap">
+                    {lines_html}
+                </div>
+                <div class="resume-heatmap-side">
+                    {side_html}
+                </div>
+            </div>
+        </div>
+        """
+    )
+
+
 def render_chip_group(title: str, items: list, key_name: str = "skill", max_items: int = 20):
     st.markdown(
         f'<div class="section-title">{html.escape(title)}</div>',
@@ -811,7 +1010,8 @@ def render_card_grid(
     body_keys: list = None,
     empty_message: str = "No data available.",
     columns: int = 2,
-    max_items: int = 5
+    max_items: int = 5,
+    adaptive: bool = True
 ):
     st.markdown(
         f'<div class="section-title">{html.escape(title)}</div>',
@@ -823,7 +1023,6 @@ def render_card_grid(
         return
 
     body_keys = body_keys or []
-    grid_class = "card-grid card-grid-1" if columns == 1 else "card-grid"
 
     cards_html = ""
 
@@ -895,6 +1094,21 @@ def render_card_grid(
             {body_html}
         </div>
         """
+
+    long_content_count = 0
+    for item in sorted_items:
+        if not isinstance(item, dict):
+            long_content_count += 1 if len(clean_value(item)) > 220 else 0
+            continue
+
+        text_length = len(clean_value(item.get(title_key, "")))
+        text_length += sum(len(clean_value(item.get(key, ""))) for key in body_keys)
+        long_content_count += 1 if text_length > 420 or len(body_keys) >= 4 else 0
+
+    if columns == 1 or (adaptive and long_content_count >= 2):
+        grid_class = "card-grid card-grid-1"
+    else:
+        grid_class = "card-grid card-grid-adaptive"
 
     render_html(f'<div class="{grid_class}">{cards_html}</div>')
 
@@ -1146,7 +1360,7 @@ def render_ats_donut(ats_keywords: list):
         ]
     )
 
-    apply_chart_layout(fig, 340, "ATS Keyword Coverage")
+    apply_chart_layout(fig, 340, "Keyword Coverage")
 
     st.plotly_chart(
         fig,
@@ -1308,7 +1522,7 @@ def render_keyword_checklist(ats_keywords: list):
     render_html(
         f"""
         <div class="ats-checklist-card">
-            <div class="section-title no-top-margin">ATS Keyword Checklist</div>
+            <div class="section-title no-top-margin">Keyword Details</div>
             <div class="keyword-grid">
                 {rows_html}
             </div>
@@ -1387,7 +1601,7 @@ def render_risk_cards(risks: list):
 
 def render_evidence_cards(matches: list, max_items: int = 5):
     st.markdown(
-        '<div class="section-title">Evidence-Based Matching</div>',
+        '<div class="section-title">Requirement Proof</div>',
         unsafe_allow_html=True
     )
 

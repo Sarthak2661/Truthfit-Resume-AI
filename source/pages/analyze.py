@@ -3,14 +3,16 @@ import streamlit as st
 from source.ai.llm_client import generate_resume_analysis
 from source.loaders.jd_loader import extract_jd_text
 from source.loaders.resume_loader import extract_text_from_file
+from source.services.resume_heatmap import redact_personal_details
 import source.ui.components as ui
 
 
 def show_analyze_page():
     ui.render_page_header(
         "Upload Resume and Job Description",
-        "Upload your resume, upload or paste a job description, then generate a visual job-fit dashboard.",
+        "Upload your resume, upload or paste a job description, then build a job-fit report.",
     )
+    ui.render_privacy_notice()
 
     input_col, preview_col = st.columns([0.95, 1.05], gap="large")
 
@@ -68,12 +70,14 @@ def show_analyze_page():
         if resume_file is not None:
             try:
                 resume_preview = extract_text_from_file(resume_file)
-                st.session_state.resume_text = resume_preview
+                redacted_resume_preview = redact_personal_details(resume_preview)
+                st.session_state.resume_text = redacted_resume_preview
 
                 st.markdown("#### Resume Preview")
+                st.caption("Personal details are redacted before preview, heatmap rendering, and live analysis.")
                 st.text_area(
-                    "Extracted resume text",
-                    value=resume_preview[:2500],
+                    "Redacted extracted resume text",
+                    value=redacted_resume_preview[:2500],
                     height=230,
                     disabled=True,
                     label_visibility="collapsed",
@@ -106,7 +110,7 @@ def show_analyze_page():
             st.error("Please upload or paste a job description.")
             return
 
-        with st.spinner("Generating visual TruthFit dashboard..."):
+        with st.spinner("Building your TruthFit report..."):
             result = generate_resume_analysis(
                 resume_text=st.session_state.resume_text,
                 job_description=st.session_state.jd_text,

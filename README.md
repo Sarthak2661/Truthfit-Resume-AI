@@ -1,6 +1,6 @@
 # TruthFit Resume AI
 
-TruthFit Resume AI is a resume and job-fit dashboard for comparing a resume against a job description. It shows fit scores, score drivers, ATS keyword coverage, evidence strength, skill gaps, resume rewrite ideas, project and certification suggestions, chat-based follow-up help, and a lightweight job tracker.
+TruthFit Resume AI is a privacy-first resume and job-fit dashboard for comparing a resume against a job description. It shows fit scores, score drivers, ATS keyword coverage, resume evidence strength, skill gaps, resume rewrite ideas, project and certification suggestions, chat-based follow-up help, and a lightweight job tracker.
 
 ## Screenshots
 
@@ -22,7 +22,10 @@ TruthFit Resume AI is a resume and job-fit dashboard for comparing a resume agai
 - Job description upload or paste input
 - Bring-your-own-key provider settings for Gemini, Claude, OpenAI, or Perplexity
 - No-API demo dashboard for recruiters and reviewers
-- Match scores for overall fit, technical fit, ATS coverage, eligibility, and experience
+- Privacy-first resume preview that redacts detected names, phone numbers, emails, URLs, and street-style addresses before live analysis
+- No-storage app behavior for uploaded resume/JD files; files are used in session and are not saved by the app
+- Match scores for overall fit, technical fit, ATS coverage, resume evidence, eligibility, and experience
+- Resume evidence score that checks whether claims are backed by concrete work, project, metric, or education proof
 - Score driver bar explaining what raises or lowers the match score
 - Evidence coverage meter for supported, partial, missing, and unsafe claims
 - Matched vs missing skills table with importance, resume evidence, and next action
@@ -81,7 +84,7 @@ pip install -r requirements-dev.txt
 pytest -q
 ```
 
-The suite covers file loaders, messy LLM JSON extraction, tracker normalization and dedupe behavior, PDF report generation, and UI text cleanup.
+The suite covers file loaders, messy LLM JSON extraction, tracker normalization and dedupe behavior, PDF report generation, UI text cleanup, resume privacy redaction, heatmap generation, and evidence scoring.
 
 ## Deployment
 
@@ -95,7 +98,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for Streamlit Cloud and Hugging Face Spaces d
 
 ## Privacy Note
 
-Resume and job-description text may be sent to the selected provider during live analysis. Do not upload sensitive documents unless you are comfortable sending that content to the provider connected by your API key.
+TruthFit redacts detected personal details before the resume preview, heatmap, and live LLM analysis. Uploaded resume and job-description files are not saved by the app. Resume/JD text may still be sent to the selected AI provider during live analysis, so avoid uploading sensitive documents unless you are comfortable with that provider's data policy.
 
 ## Git Hygiene
 

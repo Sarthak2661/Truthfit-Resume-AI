@@ -45,6 +45,7 @@ You must analyze:
 20. Certification suggestions based on missing role evidence
 21. Score drivers explaining what increases or lowers the match score
 22. Top fixes with impact and effort
+23. Resume evidence score: score whether resume claims are backed by concrete work, project, metric, or education proof
 
 Candidate-provided project evidence:
 {user_projects if user_projects.strip() else "No extra project evidence provided."}
@@ -89,6 +90,7 @@ Strict output rules:
 - For multi-part values, use concise plain sentences separated by semicolons, not nested JSON and not HTML labels like <div class="info-row">.
 - Every matched skill must include evidence.
 - Every rewritten bullet must include evidence status.
+- Score resume_evidence_score by proof quality, not keyword presence. Strong proof means the claim is backed by project, work, metric, tool, or education evidence in the resume.
 - Every major finding must include confidence, resume evidence, JD evidence, manual verification guidance, and risk.
 - If resume evidence is missing, write "Not found in resume." Do not infer experience from related skills.
 - If JD evidence is missing, write "Not found in job description."
@@ -117,6 +119,7 @@ Return this exact JSON structure:
     "overall_match_score": 0,
     "technical_match_score": 0,
     "ats_keyword_coverage_score": 0,
+    "resume_evidence_score": 0,
     "eligibility_score": 0,
     "experience_match_score": 0,
     "match_label": "Strong Match | Good Match | Partial Match | Weak Match"

@@ -18,6 +18,7 @@ def sample_analysis_result() -> dict:
             "overall_match_score": 78,
             "technical_match_score": 86,
             "ats_keyword_coverage_score": 81,
+            "resume_evidence_score": 82,
             "eligibility_score": 92,
             "experience_match_score": 74,
             "match_label": "Good Match",
@@ -41,6 +42,28 @@ def sample_analysis_result() -> dict:
                 "Several bullets would be stronger with scale, latency, accuracy, or cost metrics.",
             ],
         },
+        "resume_heatmap_text": """[REDACTED NAME]
+Data Engineer | Python, SQL, PostgreSQL, Kafka, Docker
+[REDACTED CONTACT DETAILS]
+
+PROFESSIONAL SUMMARY
+Data engineering candidate with hands-on Python, SQL, PostgreSQL, Kafka, Docker, Streamlit, Power BI, and Grafana experience across fraud analytics, transaction streaming, and distributed monitoring projects.
+
+CORE SKILLS
+Python, SQL, PostgreSQL, Kafka, Docker, Scikit-learn, Power BI, Streamlit, Grafana, Go, NATS, InfluxDB, data validation, dashboarding
+
+SELECTED PROJECTS
+Banking Fraud Detection Analytics Platform
+Designed a fraud analytics platform using SQL transformations, behavioral risk features, ML classification, and investigation dashboards to help financial teams prioritize suspicious transactions.
+
+Real-Time Credit Card Transaction Streaming Pipeline
+Built a Kafka transaction pipeline with producers and consumers, event validation, rejected-record handling, PostgreSQL loading, Docker services, and Grafana dashboards for ingestion volume, latency, errors, and health.
+
+Distributed Server Monitoring System
+Built a Go and NATS monitoring system that streams server metrics into InfluxDB, centralizes uptime visibility, and supports proactive issue detection through containerized services.
+
+GAPS TO IMPROVE
+Cloud services are not named with deployment detail. Airflow or Prefect orchestration is not shown yet.""",
         "jd_red_flags": [
             {
                 "flag": "Cloud ownership is expected",

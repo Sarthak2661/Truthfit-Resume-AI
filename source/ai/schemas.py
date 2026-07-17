@@ -18,6 +18,7 @@ def default_analysis_result(error_message: str = "") -> dict:
             "overall_match_score": 0,
             "technical_match_score": 0,
             "ats_keyword_coverage_score": 0,
+            "resume_evidence_score": 0,
             "eligibility_score": 0,
             "experience_match_score": 0,
             "match_label": "Weak Match"

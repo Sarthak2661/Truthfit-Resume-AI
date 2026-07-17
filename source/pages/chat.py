@@ -1,6 +1,7 @@
 import streamlit as st
 
 from source.ai.chat_client import generate_analysis_chat_response
+from source.services.observability import log_warning
 import source.ui.components as ui
 
 
@@ -63,6 +64,7 @@ def show_chat_page():
                     api_key=st.session_state.api_key,
                 )
             except Exception as exc:
+                log_warning("chat_response_failed", error_type=exc.__class__.__name__)
                 response = f"Chat failed: {str(exc)}"
 
             st.markdown(response)

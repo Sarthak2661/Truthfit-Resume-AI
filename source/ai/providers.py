@@ -7,6 +7,8 @@ import requests
 from dotenv import load_dotenv
 from google import genai
 
+from source.services.observability import log_event, log_warning, timed_operation
+
 load_dotenv()
 
 
@@ -214,21 +216,43 @@ def call_llm_with_retry(prompt: str, config: LLMConfig) -> str:
 
         for attempt in range(3):
             try:
-                if provider == "Claude":
-                    return _call_claude(prompt, active_config)
-                if provider == "OpenAI":
-                    return _call_openai(prompt, active_config)
-                if provider == "Perplexity":
-                    return _call_perplexity(prompt, active_config)
-                return _call_gemini(prompt, active_config)
+                with timed_operation(
+                    "llm_call",
+                    provider=provider,
+                    model=model,
+                    attempt=attempt + 1,
+                    prompt_chars=len(prompt),
+                ):
+                    if provider == "Claude":
+                        return _call_claude(prompt, active_config)
+                    if provider == "OpenAI":
+                        return _call_openai(prompt, active_config)
+                    if provider == "Perplexity":
+                        return _call_perplexity(prompt, active_config)
+                    return _call_gemini(prompt, active_config)
 
             except Exception as exc:
                 last_error = exc
 
                 if not is_retryable_error(exc):
+                    log_warning(
+                        "llm_call_non_retryable",
+                        provider=provider,
+                        model=model,
+                        attempt=attempt + 1,
+                        error_type=exc.__class__.__name__,
+                    )
                     raise exc
 
                 wait_seconds = (2 ** (attempt + 1)) + random.uniform(0, 1.5)
+                log_event(
+                    "llm_call_retry_scheduled",
+                    provider=provider,
+                    model=model,
+                    attempt=attempt + 1,
+                    wait_seconds=round(wait_seconds, 2),
+                    error_type=exc.__class__.__name__,
+                )
                 time.sleep(wait_seconds)
 
     raise last_error

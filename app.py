@@ -9,6 +9,7 @@ from source.pages.dashboard import show_dashboard_page, show_demo_page
 from source.pages.home import show_home_page
 from source.pages.tracker import show_tracker_page
 from source.services.job_tracker import load_job_tracker
+from source.services.observability import configure_logging
 import source.ui.components as ui
 import source.ui.styles as styles
 
@@ -195,6 +196,7 @@ def render_current_page():
 
 
 st.set_page_config(page_title="TruthFit Resume AI", page_icon="TF", layout="wide")
+configure_logging()
 verify_ui_contract()
 initialize_session_state()
 inject_global_styles(st.session_state.theme)

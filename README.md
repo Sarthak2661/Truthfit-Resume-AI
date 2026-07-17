@@ -136,6 +136,18 @@ The app can generate:
 
 After an analysis is generated, the chat helper can answer follow-up questions, draft a cover letter, suggest recruiter outreach, or explain the score. The report can also be exported as a PDF.
 
+### Basic Observability
+
+TruthFit logs privacy-safe operational events for local and cloud debugging:
+
+- provider/model used for live calls
+- request duration and retry attempts
+- JSON parsing failures
+- file loading errors
+- chat and analysis failures
+
+Logs intentionally exclude API keys, prompts, resume text, job descriptions, and uploaded file contents.
+
 ## Dashboard Structure
 
 The dashboard is organized around five product sections:

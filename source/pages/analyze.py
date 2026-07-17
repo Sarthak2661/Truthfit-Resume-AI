@@ -3,6 +3,7 @@ import streamlit as st
 from source.ai.llm_client import generate_resume_analysis
 from source.loaders.jd_loader import extract_jd_text
 from source.loaders.resume_loader import extract_text_from_file
+from source.services.observability import log_warning
 from source.services.resume_heatmap import redact_personal_details
 import source.ui.components as ui
 
@@ -83,6 +84,7 @@ def show_analyze_page():
                     label_visibility="collapsed",
                 )
             except Exception as exc:
+                log_warning("resume_load_failed", error_type=exc.__class__.__name__)
                 st.error(f"Could not read resume: {str(exc)}")
 
         try:
@@ -99,6 +101,7 @@ def show_analyze_page():
                     label_visibility="collapsed",
                 )
         except Exception as exc:
+            log_warning("jd_load_failed", error_type=exc.__class__.__name__)
             st.error(f"Could not read job description: {str(exc)}")
 
     if analyze_clicked:

@@ -1,6 +1,7 @@
 import json
 
 from source.ai.providers import LLMConfig, call_llm_with_retry
+from source.services.observability import new_request_id, timed_operation
 
 
 def build_analysis_chat_prompt(
@@ -48,6 +49,7 @@ def generate_analysis_chat_response(
     api_key: str,
     mode: str = "Question",
 ) -> str:
+    request_id = new_request_id()
     prompt = build_analysis_chat_prompt(
         question=question,
         analysis_result=analysis_result,
@@ -56,7 +58,16 @@ def generate_analysis_chat_response(
         mode=mode,
     )
 
-    return call_llm_with_retry(
-        prompt,
-        LLMConfig(provider=provider, model=model, api_key=api_key),
-    )
+    with timed_operation(
+        "chat_generation",
+        request_id=request_id,
+        provider=provider,
+        model=model,
+        question_chars=len(question),
+        resume_chars=len(resume_text[:6000]),
+        jd_chars=len(job_description[:5000]),
+    ):
+        return call_llm_with_retry(
+            prompt,
+            LLMConfig(provider=provider, model=model, api_key=api_key),
+        )

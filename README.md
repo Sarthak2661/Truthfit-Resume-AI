@@ -10,17 +10,17 @@ The goal is not to "game" an ATS or invent stronger experience. TruthFit is buil
 
 ## Screenshots
 
-| Landing | Analyze | Dashboard |
+| Home | Analyze | Overview |
 | --- | --- | --- |
 | ![Landing](resources/landing.png) | ![Analyze](resources/analyze.png) | ![Dashboard](resources/dashboard.png) |
 
-| Job Details | Skills and ATS | Growth Plan |
+| Skills & Requirements | Evidence & Risks | Improve Resume |
 | --- | --- | --- |
-| ![Job Details](resources/Jobdetails.png) | ![Skills and ATS](resources/skills&ATS.png) | ![Growth Plan](resources/growthplan.png) |
+| ![Skills and Requirements](resources/skills-requirements.png) | ![Evidence and Risks](resources/evidence-risks.png) | ![Improve Resume](resources/improve-resume.png) |
 
-| Chat | Cover Letter | Job Tracker |
-| --- | --- | --- |
-| ![Chatbot](resources/chatbot.png) | ![Cover Letter](resources/coverletter.png) | ![Job Tracker](resources/JobTracker.png) |
+| Export & Track | Job Tracker |
+| --- | --- |
+| ![Export and Track](resources/export-track.png) | ![Job Tracker](resources/tracker.png) |
 
 ## What It Does
 

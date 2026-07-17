@@ -1,5 +1,9 @@
 # TruthFit Resume AI
 
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://truthfit-resume-ai-vaos6czappyfazhugbyffub.streamlit.app/)
+
+**Live app:** https://truthfit-resume-ai-vaos6czappyfazhugbyffub.streamlit.app/
+
 TruthFit Resume AI is a privacy-first resume and job-fit review app. It compares a resume against a job description, explains the match score, checks whether resume claims are backed by real evidence, and turns gaps into practical next steps.
 
 The goal is not to "game" an ATS or invent stronger experience. TruthFit is built around a simple idea: a resume should be tailored only with evidence that already exists in the candidate's work, projects, education, or portfolio.

@@ -5,6 +5,19 @@ from contextlib import contextmanager
 
 
 LOGGER_NAME = "truthfit"
+ALLOWED_LOG_FIELDS = {
+    "request_id",
+    "provider",
+    "model",
+    "attempt",
+    "prompt_chars",
+    "duration_ms",
+    "error_type",
+    "wait_seconds",
+    "file_type",
+    "page",
+    "status",
+}
 
 
 def configure_logging() -> None:
@@ -62,7 +75,7 @@ def _format_fields(fields: dict) -> str:
     clean_fields = {
         key: value
         for key, value in fields.items()
-        if value is not None and key not in {"api_key", "prompt", "resume_text", "job_description"}
+        if value is not None and key in ALLOWED_LOG_FIELDS
     }
 
     if not clean_fields:

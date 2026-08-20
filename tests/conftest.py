@@ -23,5 +23,10 @@ class FakePdfReader:
         ]
 
 
+class LargeFakePdfReader:
+    def __init__(self, uploaded_file):
+        self.pages = [FakePdfPage(f"Page {index}") for index in range(12)]
+
+
 def make_upload(data: bytes, name: str) -> NamedBytesIO:
     return NamedBytesIO(data, name)

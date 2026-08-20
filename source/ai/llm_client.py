@@ -3,7 +3,7 @@ import re
 
 from source.ai.prompts import build_resume_analysis_prompt
 from source.ai.providers import LLMConfig, call_llm_with_retry
-from source.ai.schemas import default_analysis_result
+from source.ai.schemas import default_analysis_result, validate_analysis_result
 from source.services.observability import log_warning, new_request_id, timed_operation
 
 
@@ -59,7 +59,7 @@ def generate_resume_analysis(
                 prompt,
                 LLMConfig(provider=provider, model=model, api_key=api_key),
             )
-        return extract_json(output_text)
+        return validate_analysis_result(extract_json(output_text))
 
     except json.JSONDecodeError as exc:
         log_warning(

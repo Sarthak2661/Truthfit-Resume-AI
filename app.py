@@ -1,5 +1,3 @@
-import importlib
-
 import streamlit as st
 
 from source.ai.providers import models_for_provider, provider_names
@@ -14,68 +12,7 @@ import source.ui.components as ui
 import source.ui.styles as styles
 
 
-# Force Streamlit to reload the latest saved UI files during local development.
-ui = importlib.reload(ui)
-styles = importlib.reload(styles)
 inject_global_styles = styles.inject_global_styles
-
-
-APP_BUILD = "portfolio-polish-v4-2026-06-29"
-SHOW_DEBUG = False
-
-
-REQUIRED_UI_FUNCTIONS = [
-    "render_navbar",
-    "render_homepage",
-    "render_page_header",
-    "render_section_kicker",
-    "render_verdict_card",
-    "render_score_card",
-    "render_recommendation_card",
-    "render_privacy_notice",
-    "render_resume_evidence_score",
-    "render_score_radar",
-    "render_score_driver_bar",
-    "render_evidence_coverage_meter",
-    "render_skill_match_table",
-    "render_resume_heatmap",
-    "render_top_strengths_concerns",
-    "render_action_plan",
-    "render_analysis_disclaimer",
-    "render_confidence_findings",
-    "render_fix_impact_matrix",
-    "render_ats_donut",
-    "render_requirement_status_bar",
-    "render_missing_skill_priority_chart",
-    "render_visual_note_card",
-    "render_keyword_checklist",
-    "render_summary_card",
-    "render_card_grid",
-    "render_chip_group",
-    "render_risk_cards",
-    "render_evidence_cards",
-    "render_bullet_comparison",
-    "normalize_analysis_result",
-    "clean_value",
-    "bullet_text",
-]
-
-
-def verify_ui_contract():
-    missing_ui_functions = [
-        function_name
-        for function_name in REQUIRED_UI_FUNCTIONS
-        if not hasattr(ui, function_name)
-    ]
-
-    if missing_ui_functions:
-        raise RuntimeError(
-            "app.py is not loading the expected source/ui/components.py file.\n\n"
-            f"Loaded file: {getattr(ui, '__file__', 'UNKNOWN')}\n"
-            f"Missing functions: {missing_ui_functions}\n\n"
-            "Open the loaded file path above, paste the latest full components.py there, save it, "
-            "then restart Streamlit."
-        )
 
 
 def initialize_session_state():
@@ -197,16 +134,11 @@ def render_current_page():
 
 st.set_page_config(page_title="TruthFit Resume AI", page_icon="TF", layout="wide")
 configure_logging()
-verify_ui_contract()
 initialize_session_state()
 inject_global_styles(st.session_state.theme)
 
 render_ai_settings()
 ui.render_navbar()
 render_top_controls_with_theme_toggle()
-
-if SHOW_DEBUG:
-    st.caption(f"Build: {APP_BUILD}")
-    st.caption(f"Loaded components.py: {getattr(ui, '__file__', 'UNKNOWN')}")
 
 render_current_page()

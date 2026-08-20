@@ -1,6 +1,8 @@
 from pypdf import PdfReader
 from docx import Document
 
+from source.loaders.validation import validate_pdf_page_count, validate_upload_size
+
 
 def extract_text_from_file(uploaded_file) -> str:
     """
@@ -9,6 +11,7 @@ def extract_text_from_file(uploaded_file) -> str:
     if uploaded_file is None:
         return ""
 
+    validate_upload_size(uploaded_file, "Resume")
     file_name = uploaded_file.name.lower()
 
     if file_name.endswith(".pdf"):
@@ -25,6 +28,7 @@ def extract_text_from_file(uploaded_file) -> str:
 
 def extract_pdf_text(uploaded_file) -> str:
     reader = PdfReader(uploaded_file)
+    validate_pdf_page_count(reader, "Resume")
     text = []
 
     for page in reader.pages:

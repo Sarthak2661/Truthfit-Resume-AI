@@ -1,7 +1,8 @@
 import streamlit as st
 
-from source.services.report_generator import generate_pdf_report
+from source.ai.schemas import validate_analysis_result
 from source.services.evidence_score import add_resume_evidence_score
+from source.services.report_generator import generate_pdf_report
 from source.services.resume_heatmap import build_resume_heatmap
 from source.services.sample_analysis import sample_analysis_result
 import source.ui.components as ui
@@ -19,7 +20,7 @@ def show_dashboard_page(result_override=None, demo_mode: bool = False):
 
         return
 
-    result = add_resume_evidence_score(ui.normalize_analysis_result(result))
+    result = add_resume_evidence_score(validate_analysis_result(ui.normalize_analysis_result(result)))
     if not demo_mode:
         st.session_state.analysis_result = result
 

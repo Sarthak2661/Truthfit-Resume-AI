@@ -23,6 +23,53 @@ Python and SQL data engineer.
     assert "[REDACTED ADDRESS]" in redacted
 
 
+def test_redaction_heuristic_covers_realistic_resume_layouts():
+    cases = [
+        (
+            """JANE DOE
+Data Engineer | jane.doe@example.com | +1 (415) 555-0199
+San Francisco, CA | linkedin.com/in/janedoe
+""",
+            ["JANE DOE", "jane.doe@example.com", "415", "linkedin.com/in/janedoe"],
+        ),
+        (
+            """Rahul Mehta
+rahul.mehta@email.com
++91-9876543210
+github.com/rahulmehta
+42 MG Road, Bengaluru
+""",
+            ["Rahul Mehta", "rahul.mehta@email.com", "9876543210", "github.com/rahulmehta", "42 MG Road"],
+        ),
+        (
+            """Maria Garcia
+Email: maria.garcia@test.com | Phone: 020 7946 0958
+www.mariagarcia.dev
+""",
+            ["Maria Garcia", "maria.garcia@test.com", "020 7946 0958", "www.mariagarcia.dev"],
+        ),
+        (
+            """AARAV SHARMA
+Analytics Engineer
+aarav.sharma@test.co | +971 50 123 4567 | linkedin.com/in/aarav-sharma
+""",
+            ["AARAV SHARMA", "aarav.sharma@test.co", "+971 50 123 4567", "linkedin.com/in/aarav-sharma"],
+        ),
+    ]
+
+    checked_tokens = 0
+    redacted_tokens = 0
+
+    for resume_text, sensitive_tokens in cases:
+        redacted = redact_personal_details(resume_text)
+        for token in sensitive_tokens:
+            checked_tokens += 1
+            if token not in redacted:
+                redacted_tokens += 1
+
+    assert redacted_tokens == checked_tokens
+
+
 def test_build_resume_heatmap_marks_covered_partial_and_missing_keywords():
     resume_text = """Jane Candidate
 Data Engineer

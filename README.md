@@ -5,7 +5,7 @@
 
 **Live app:** https://truthfit-resume-ai-vaos6czappyfazhugbyffub.streamlit.app/
 
-TruthFit Resume AI is a privacy-first resume and job-fit review app. It compares a resume against a job description, explains the match score, checks whether resume claims are backed by real evidence, and turns gaps into practical next steps.
+TruthFit Resume AI is a resume and job-fit review app with privacy-aware redaction. It compares a resume against a job description, explains the match score, checks whether resume claims are backed by real evidence, and turns gaps into practical next steps.
 
 The goal is not to "game" an ATS or invent stronger experience. TruthFit is built around a simple idea: a resume should be tailored only with evidence that already exists in the candidate's work, projects, education, or portfolio.
 
@@ -55,13 +55,24 @@ TruthFit keeps the product split simple: loaders extract text, privacy redaction
 
 Safe demo inputs are included in [`samples/sample_resume.txt`](samples/sample_resume.txt) and [`samples/sample_job_description.txt`](samples/sample_job_description.txt). They are fictional and safe to use when testing the deployed app.
 
+## Fastest Demo Path
+
+1. Open the [live app](https://truthfit-resume-ai-vaos6czappyfazhugbyffub.streamlit.app/).
+2. Click **Try Demo** in the sidebar.
+3. Review the dashboard sections in order: Overview, Skills & Requirements, Evidence & Risks, Improve Resume, and Export & Track.
+4. Open **Tracker** to see how a completed analysis can be saved as an application record.
+
+The demo uses synthetic data and does not call Gemini, Claude, OpenAI, or Perplexity.
+
 ## Core Features
 
-### Privacy-First Review
+### Privacy-Aware Review
 
-TruthFit redacts detected personal details before resume preview, proof mapping, and live provider calls. It currently targets names, phone numbers, emails, URLs, and street-style addresses.
+TruthFit applies best-effort redaction before resume preview, proof mapping, and live provider calls. It currently targets common names, phone numbers, emails, URLs, and street-style addresses.
 
 Uploaded resume and job-description files are not saved by the app. TruthFit uses session text for analysis and stores only local tracker data when a job-tracker entry is saved.
+
+The redaction heuristic is covered by tests against several realistic resume-header layouts across US, India, UK, and GCC-style contact formats. The current fixture set redacts all checked sensitive tokens, but this is still a test-sample result, not a guarantee for every resume design.
 
 ### Resume Evidence Score
 
@@ -99,6 +110,8 @@ TruthFit uses structured model output plus local normalization checks. The score
 - **Score drivers** explain what raised or lowered the final score so the result does not feel like a black box.
 
 The prompt requires the model to write "Not found in resume" when evidence is missing. The UI also shows confidence, resume evidence, JD evidence, and what should be verified manually for major findings.
+
+Before results are rendered, TruthFit validates the model response with Pydantic-backed schema checks. Missing sections are filled with safe defaults, score fields are clamped to 0-100, and malformed list/dictionary sections are normalized so the dashboard does not render raw or unstable model output.
 
 ### Skills and Requirements Review
 
@@ -225,7 +238,7 @@ The test suite covers:
 - job tracker normalization, save/load, and dedupe behavior
 - PDF report generation
 - UI text cleanup
-- privacy redaction
+- privacy-aware redaction
 - resume proof map generation
 - resume evidence scoring
 
@@ -247,7 +260,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for deployment steps.
 - The ATS score is an approximation, not a real ATS simulation.
 - Model output can be incomplete, inconsistent, or overconfident.
 - PDF parsing can be messy for resumes with columns, tables, images, or unusual layouts.
-- Privacy redaction is best-effort and should not be treated as legal or compliance-grade anonymization.
+- Privacy redaction is heuristic and should not be treated as legal or compliance-grade anonymization.
 - Live analysis still sends redacted resume/JD text to the selected provider.
 - The local job tracker is suitable for portfolio/demo use, not multi-user production storage.
 
@@ -287,7 +300,7 @@ Add user accounts so each person can save analyses, revisit job-tracker entries,
 
 ## Privacy Note
 
-TruthFit redacts detected personal details before resume preview, proof mapping, and live analysis. Uploaded resume and job-description files are not saved by the app. Resume/JD text may still be sent to the selected AI provider during live analysis, so avoid uploading sensitive documents unless you are comfortable with that provider's data policy.
+TruthFit applies heuristic redaction before resume preview, proof mapping, and live analysis. Uploaded resume and job-description files are not saved by the app. Resume/JD text may still be sent to the selected AI provider during live analysis, so avoid uploading sensitive documents unless you are comfortable with that provider's data policy.
 
 ## Git Hygiene
 

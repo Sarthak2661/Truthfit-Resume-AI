@@ -3,7 +3,7 @@ from io import BytesIO
 from docx import Document
 
 from source.loaders import jd_loader, resume_loader
-from tests.conftest import FakePdfReader, make_upload
+from tests.conftest import FakePdfReader, LargeFakePdfReader, make_upload
 
 
 def make_docx_upload(name="resume.docx"):
@@ -50,6 +50,29 @@ def test_resume_loader_rejects_unsupported_file_type():
         raise AssertionError("Expected unsupported resume file type to raise ValueError")
 
 
+def test_resume_loader_rejects_large_upload():
+    uploaded = make_upload(b"x" * (6 * 1024 * 1024), "resume.txt")
+
+    try:
+        resume_loader.extract_text_from_file(uploaded)
+    except ValueError as exc:
+        assert "too large" in str(exc)
+    else:
+        raise AssertionError("Expected oversized resume to raise ValueError")
+
+
+def test_resume_loader_rejects_long_pdf(monkeypatch):
+    monkeypatch.setattr(resume_loader, "PdfReader", LargeFakePdfReader)
+    uploaded = make_upload(b"%PDF fake", "resume.pdf")
+
+    try:
+        resume_loader.extract_text_from_file(uploaded)
+    except ValueError as exc:
+        assert "pages or fewer" in str(exc)
+    else:
+        raise AssertionError("Expected long resume PDF to raise ValueError")
+
+
 def test_jd_loader_combines_uploaded_txt_and_pasted_text():
     uploaded = make_upload(b"Uploaded JD text", "job.txt")
 
@@ -69,3 +92,15 @@ def test_jd_loader_extracts_pdf_with_reader(monkeypatch):
     uploaded = make_upload(b"%PDF fake", "job.pdf")
 
     assert "Second PDF page" in jd_loader.extract_jd_text(uploaded, "")
+
+
+def test_jd_loader_rejects_long_pdf(monkeypatch):
+    monkeypatch.setattr(jd_loader, "PdfReader", LargeFakePdfReader)
+    uploaded = make_upload(b"%PDF fake", "job.pdf")
+
+    try:
+        jd_loader.extract_jd_text(uploaded, "")
+    except ValueError as exc:
+        assert "pages or fewer" in str(exc)
+    else:
+        raise AssertionError("Expected long JD PDF to raise ValueError")

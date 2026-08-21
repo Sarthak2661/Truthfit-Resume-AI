@@ -5,6 +5,7 @@ from source.services.evidence_score import add_resume_evidence_score
 from source.services.report_generator import generate_pdf_report
 from source.services.resume_heatmap import build_resume_heatmap
 from source.services.sample_analysis import sample_analysis_result
+from source.services.url_utils import is_valid_http_url
 import source.ui.components as ui
 
 
@@ -34,6 +35,7 @@ def show_dashboard_page(result_override=None, demo_mode: bool = False):
     ats_breakdown = result.get("ats_score_breakdown", [])
     resume_heatmap_text = result.get("resume_heatmap_text") or st.session_state.get("resume_text", "")
     resume_heatmap = build_resume_heatmap(resume_heatmap_text, result)
+    job_link = str(job.get("job_link", "") or "").strip()
 
     ui.render_page_header(
         "Sample Report" if demo_mode else "Dashboard",
@@ -112,9 +114,10 @@ def show_dashboard_page(result_override=None, demo_mode: bool = False):
                 f"Experience: {job.get('experience_required', 'Not specified')}",
             )
 
-        job_link = str(job.get("job_link", "") or "").strip()
-        if job_link:
+        if job_link and is_valid_http_url(job_link):
             st.markdown(f"**Job posting:** [Open original posting]({job_link})")
+        elif job_link:
+            st.caption("Job posting link was not shown because it is not a valid http(s) URL.")
 
         ui.render_skill_match_table(skills, ats_keywords)
 
@@ -294,8 +297,10 @@ def show_dashboard_page(result_override=None, demo_mode: bool = False):
         with export_cols[2]:
             ui.render_summary_card("Tracker", "Ready", "Save this analysis as an opportunity")
 
-        if job_link:
+        if job_link and is_valid_http_url(job_link):
             st.markdown(f"**Job posting:** [Open original posting]({job_link})")
+        elif job_link:
+            st.caption("Job posting link was not shown because it is not a valid http(s) URL.")
 
         action_col1, action_col2 = st.columns(2, gap="medium")
 

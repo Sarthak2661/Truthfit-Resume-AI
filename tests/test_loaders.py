@@ -2,7 +2,7 @@ from io import BytesIO
 
 from docx import Document
 
-from source.loaders import jd_loader, resume_loader
+from source.loaders import jd_loader, resume_loader, text_extractors
 from tests.conftest import FakePdfReader, LargeFakePdfReader, make_upload
 
 
@@ -33,7 +33,7 @@ def test_resume_loader_extracts_docx():
 
 
 def test_resume_loader_extracts_pdf_with_reader(monkeypatch):
-    monkeypatch.setattr(resume_loader, "PdfReader", FakePdfReader)
+    monkeypatch.setattr(text_extractors, "PdfReader", FakePdfReader)
     uploaded = make_upload(b"%PDF fake", "resume.pdf")
 
     assert resume_loader.extract_text_from_file(uploaded) == "First PDF page\nSecond PDF page"
@@ -62,7 +62,7 @@ def test_resume_loader_rejects_large_upload():
 
 
 def test_resume_loader_rejects_long_pdf(monkeypatch):
-    monkeypatch.setattr(resume_loader, "PdfReader", LargeFakePdfReader)
+    monkeypatch.setattr(text_extractors, "PdfReader", LargeFakePdfReader)
     uploaded = make_upload(b"%PDF fake", "resume.pdf")
 
     try:
@@ -88,14 +88,14 @@ def test_jd_loader_extracts_docx():
 
 
 def test_jd_loader_extracts_pdf_with_reader(monkeypatch):
-    monkeypatch.setattr(jd_loader, "PdfReader", FakePdfReader)
+    monkeypatch.setattr(text_extractors, "PdfReader", FakePdfReader)
     uploaded = make_upload(b"%PDF fake", "job.pdf")
 
     assert "Second PDF page" in jd_loader.extract_jd_text(uploaded, "")
 
 
 def test_jd_loader_rejects_long_pdf(monkeypatch):
-    monkeypatch.setattr(jd_loader, "PdfReader", LargeFakePdfReader)
+    monkeypatch.setattr(text_extractors, "PdfReader", LargeFakePdfReader)
     uploaded = make_upload(b"%PDF fake", "job.pdf")
 
     try:

@@ -36,3 +36,27 @@ def test_call_llm_with_retry_does_not_retry_non_retryable_error(monkeypatch):
         providers.call_llm_with_retry("prompt", LLMConfig(provider="Gemini", model="gemini-2.5-flash", api_key="bad"))
 
     assert calls == ["gemini-2.5-flash"]
+
+
+def test_call_llm_with_retry_logs_model_fallback(monkeypatch):
+    events = []
+
+    def unavailable_then_ok(prompt, config):
+        if config.model == "gemini-2.5-flash":
+            raise RuntimeError("503 temporarily unavailable")
+        return "ok"
+
+    monkeypatch.setattr(providers, "_call_gemini", unavailable_then_ok)
+    monkeypatch.setattr(providers.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(providers.random, "uniform", lambda start, end: 0)
+    monkeypatch.setattr(providers, "log_event", lambda event, **fields: events.append((event, fields)))
+
+    result = providers.call_llm_with_retry("prompt", LLMConfig(provider="Gemini", model="gemini-2.5-flash", api_key="key"))
+
+    assert result == "ok"
+    assert any(
+        event == "llm_call_model_fallback"
+        and fields["requested_model"] == "gemini-2.5-flash"
+        and fields["fallback_model"] == "gemini-2.5-flash-lite"
+        for event, fields in events
+    )

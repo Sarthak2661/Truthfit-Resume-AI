@@ -208,6 +208,14 @@ def call_llm_with_retry(prompt: str, config: LLMConfig) -> str:
     last_error = None
 
     for model in models:
+        if config.model and model != config.model:
+            log_event(
+                "llm_call_model_fallback",
+                provider=provider,
+                requested_model=config.model,
+                fallback_model=model,
+            )
+
         active_config = LLMConfig(
             provider=provider,
             model=model,

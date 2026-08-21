@@ -197,6 +197,8 @@ The dashboard is organized around five product sections:
 
 ## Setup
 
+TruthFit is developed and tested with **Python 3.12.8**. Use the same version locally when possible; the repo also includes `.python-version` and `runtime.txt` for deployment alignment.
+
 1. Create and activate a virtual environment.
 
 2. Install dependencies:

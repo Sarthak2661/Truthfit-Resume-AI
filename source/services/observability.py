@@ -9,6 +9,8 @@ ALLOWED_LOG_FIELDS = {
     "request_id",
     "provider",
     "model",
+    "requested_model",
+    "fallback_model",
     "attempt",
     "prompt_chars",
     "duration_ms",

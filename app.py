@@ -38,8 +38,18 @@ def initialize_session_state():
         st.session_state.model = models_for_provider(st.session_state.provider)[0]
     elif st.session_state.model not in models_for_provider(st.session_state.provider):
         st.session_state.model = models_for_provider(st.session_state.provider)[0]
-    elif st.session_state.provider == "Gemini" and st.session_state.model == "gemini-2.5-flash":
-        st.session_state.model = models_for_provider("Gemini")[0]
+
+    if "provider_select_v2" not in st.session_state:
+        st.session_state.provider_select_v2 = st.session_state.provider
+
+    if "model_select_v2" not in st.session_state:
+        st.session_state.model_select_v2 = st.session_state.model
+
+    if st.session_state.provider_select_v2 not in provider_names():
+        st.session_state.provider_select_v2 = "Gemini"
+
+    if st.session_state.model_select_v2 not in models_for_provider(st.session_state.provider_select_v2):
+        st.session_state.model_select_v2 = models_for_provider(st.session_state.provider_select_v2)[0]
 
     if "job_tracker_df" not in st.session_state:
         st.session_state.job_tracker_df = load_job_tracker()
@@ -54,6 +64,7 @@ def render_ai_settings():
             provider_names(),
             index=provider_names().index(st.session_state.provider),
             help="Use your own API key. Keys stay in this browser session and are not saved by the app.",
+            key="provider_select_v2",
         )
 
         available_models = models_for_provider(provider)
@@ -61,6 +72,7 @@ def render_ai_settings():
         if provider != st.session_state.provider:
             st.session_state.provider = provider
             st.session_state.model = available_models[0]
+            st.session_state.model_select_v2 = available_models[0]
 
         model_index = (
             available_models.index(st.session_state.model)
@@ -68,7 +80,12 @@ def render_ai_settings():
             else 0
         )
 
-        st.session_state.model = st.selectbox("Model", available_models, index=model_index)
+        st.session_state.model = st.selectbox(
+            "Model",
+            available_models,
+            index=model_index,
+            key="model_select_v2",
+        )
 
         st.session_state.api_key = st.text_input(
             f"{provider} API key",

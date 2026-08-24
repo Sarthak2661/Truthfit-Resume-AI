@@ -36,6 +36,10 @@ def initialize_session_state():
 
     if "model" not in st.session_state:
         st.session_state.model = models_for_provider(st.session_state.provider)[0]
+    elif st.session_state.model not in models_for_provider(st.session_state.provider):
+        st.session_state.model = models_for_provider(st.session_state.provider)[0]
+    elif st.session_state.provider == "Gemini" and st.session_state.model == "gemini-2.5-flash":
+        st.session_state.model = models_for_provider("Gemini")[0]
 
     if "job_tracker_df" not in st.session_state:
         st.session_state.job_tracker_df = load_job_tracker()

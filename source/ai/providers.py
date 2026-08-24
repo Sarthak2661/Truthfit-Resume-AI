@@ -14,6 +14,7 @@ load_dotenv()
 
 PROVIDER_MODELS = {
     "Gemini": [
+        "gemini-3.6-flash",
         "gemini-2.5-flash",
         "gemini-2.5-flash-lite",
         "gemini-2.0-flash",
@@ -39,7 +40,7 @@ PROVIDER_MODELS = {
 @dataclass(frozen=True)
 class LLMConfig:
     provider: str = "Gemini"
-    model: str = "gemini-2.5-flash"
+    model: str = "gemini-3.6-flash"
     api_key: str = ""
 
 
@@ -81,6 +82,17 @@ def is_retryable_error(error: Exception) -> bool:
         "timeout",
     ]
     return any(signal in error_text for signal in retryable_signals)
+
+
+def is_model_unavailable_error(error: Exception) -> bool:
+    error_text = str(error).lower()
+    unavailable_signals = [
+        "404",
+        "not_found",
+        "not found",
+        "no longer available",
+    ]
+    return "model" in error_text and any(signal in error_text for signal in unavailable_signals)
 
 
 def _call_gemini(prompt: str, config: LLMConfig) -> str:
@@ -243,6 +255,16 @@ def call_llm_with_retry(prompt: str, config: LLMConfig) -> str:
                 last_error = exc
 
                 if not is_retryable_error(exc):
+                    if is_model_unavailable_error(exc) and model != models[-1]:
+                        log_warning(
+                            "llm_call_model_unavailable",
+                            provider=provider,
+                            model=model,
+                            attempt=attempt + 1,
+                            error_type=exc.__class__.__name__,
+                        )
+                        break
+
                     log_warning(
                         "llm_call_non_retryable",
                         provider=provider,

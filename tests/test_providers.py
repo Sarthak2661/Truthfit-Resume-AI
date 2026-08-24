@@ -57,6 +57,26 @@ def test_call_llm_with_retry_logs_model_fallback(monkeypatch):
     assert any(
         event == "llm_call_model_fallback"
         and fields["requested_model"] == "gemini-2.5-flash"
-        and fields["fallback_model"] == "gemini-2.5-flash-lite"
+        and fields["fallback_model"] == "gemini-3.6-flash"
         for event, fields in events
     )
+
+
+def test_call_llm_with_retry_falls_back_when_model_is_no_longer_available(monkeypatch):
+    calls = []
+
+    def old_model_unavailable(prompt, config):
+        calls.append(config.model)
+        if config.model == "gemini-2.5-flash":
+            raise RuntimeError(
+                "404 NOT_FOUND: This model models/gemini-2.5-flash is no longer available to new users."
+            )
+        return "ok"
+
+    monkeypatch.setattr(providers, "_call_gemini", old_model_unavailable)
+    monkeypatch.setattr(providers.time, "sleep", lambda seconds: None)
+
+    result = providers.call_llm_with_retry("prompt", LLMConfig(provider="Gemini", model="gemini-2.5-flash", api_key="key"))
+
+    assert result == "ok"
+    assert calls == ["gemini-2.5-flash", "gemini-3.6-flash"]

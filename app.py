@@ -13,6 +13,7 @@ import source.ui.styles as styles
 
 
 inject_global_styles = styles.inject_global_styles
+APP_BUILD = "gemini-selector-v3"
 
 
 def initialize_session_state():
@@ -34,22 +35,26 @@ def initialize_session_state():
         if key not in st.session_state:
             st.session_state[key] = value
 
+    if st.session_state.provider not in provider_names():
+        st.session_state.provider = "Gemini"
+
     if "model" not in st.session_state:
         st.session_state.model = models_for_provider(st.session_state.provider)[0]
-    elif st.session_state.model not in models_for_provider(st.session_state.provider):
+
+    if st.session_state.model not in models_for_provider(st.session_state.provider):
         st.session_state.model = models_for_provider(st.session_state.provider)[0]
 
-    if "provider_select_v2" not in st.session_state:
-        st.session_state.provider_select_v2 = st.session_state.provider
+    if "provider_select_v3" not in st.session_state:
+        st.session_state.provider_select_v3 = st.session_state.provider
 
-    if "model_select_v2" not in st.session_state:
-        st.session_state.model_select_v2 = st.session_state.model
+    if st.session_state.provider_select_v3 not in provider_names():
+        st.session_state.provider_select_v3 = "Gemini"
 
-    if st.session_state.provider_select_v2 not in provider_names():
-        st.session_state.provider_select_v2 = "Gemini"
+    if "model_select_v3" not in st.session_state:
+        st.session_state.model_select_v3 = st.session_state.model
 
-    if st.session_state.model_select_v2 not in models_for_provider(st.session_state.provider_select_v2):
-        st.session_state.model_select_v2 = models_for_provider(st.session_state.provider_select_v2)[0]
+    if st.session_state.model_select_v3 not in models_for_provider(st.session_state.provider_select_v3):
+        st.session_state.model_select_v3 = models_for_provider(st.session_state.provider_select_v3)[0]
 
     if "job_tracker_df" not in st.session_state:
         st.session_state.job_tracker_df = load_job_tracker()
@@ -64,7 +69,7 @@ def render_ai_settings():
             provider_names(),
             index=provider_names().index(st.session_state.provider),
             help="Use your own API key. Keys stay in this browser session and are not saved by the app.",
-            key="provider_select_v2",
+            key="provider_select_v3",
         )
 
         available_models = models_for_provider(provider)
@@ -72,7 +77,13 @@ def render_ai_settings():
         if provider != st.session_state.provider:
             st.session_state.provider = provider
             st.session_state.model = available_models[0]
-            st.session_state.model_select_v2 = available_models[0]
+            st.session_state.model_select_v3 = available_models[0]
+
+        if st.session_state.model not in available_models:
+            st.session_state.model = available_models[0]
+
+        if st.session_state.model_select_v3 not in available_models:
+            st.session_state.model_select_v3 = available_models[0]
 
         model_index = (
             available_models.index(st.session_state.model)
@@ -84,7 +95,7 @@ def render_ai_settings():
             "Model",
             available_models,
             index=model_index,
-            key="model_select_v2",
+            key="model_select_v3",
         )
 
         st.session_state.api_key = st.text_input(
@@ -95,6 +106,7 @@ def render_ai_settings():
         )
 
         st.caption("Use a temporary provider key for live testing and avoid uploading sensitive documents.")
+        st.caption(f"Build: {APP_BUILD}")
         st.markdown('<div class="sidebar-demo-spacer"></div>', unsafe_allow_html=True)
 
         if st.button("Try Demo", type="primary", width="stretch", key="try_demo_sidebar"):

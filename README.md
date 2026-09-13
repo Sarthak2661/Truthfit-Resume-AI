@@ -43,6 +43,16 @@ flowchart LR
 
 TruthFit keeps the product split simple: loaders extract text, privacy redaction removes detected personal details, provider clients return structured analysis, and the UI renders the result as scores, tables, proof checks, resume improvements, export, and tracking.
 
+The first API extraction lives under `apps/api`. It exposes parse, analysis, tailoring, health, and provider endpoints while reusing the existing parsing, privacy, provider, schema, scoring, and cleanup services.
+
+For the detailed current architecture, target v2 architecture, migration plan, and architecture decisions, see:
+
+- [Architecture](docs/architecture.md)
+- [FastAPI backend](docs/api.md)
+- [Platform roadmap](docs/platform-roadmap.md)
+- [v1 Streamlit baseline](docs/v1-baseline.md)
+- [Architecture decision records](docs/adr/ADR-001-keep-streamlit-v1-as-baseline.md)
+
 ## What It Does
 
 - Upload a resume as PDF, DOCX, or TXT.
@@ -70,7 +80,7 @@ The demo uses synthetic data and does not call Gemini, Claude, OpenAI, or Perple
 
 TruthFit applies best-effort redaction before resume preview, proof mapping, and live provider calls. It currently targets common names, phone numbers, emails, URLs, and street-style addresses.
 
-Uploaded resume and job-description files are not saved by the app. TruthFit uses session text for analysis and stores only local tracker data when a job-tracker entry is saved.
+The Streamlit app does not save uploaded resume and job-description files. It uses session text for analysis and stores local tracker data when an entry is saved. The separate FastAPI backend persists original and redacted resume text, JD text, user email, completed results, and evidence in its database when an analysis succeeds. See [API storage and access boundaries](docs/api.md#storage-and-access-boundaries).
 
 The redaction heuristic is covered by tests against several realistic resume-header layouts across US, India, UK, and GCC-style contact formats. The current fixture set redacts all checked sensitive tokens, but this is still a test-sample result, not a guarantee for every resume design.
 
@@ -222,6 +232,31 @@ PERPLEXITY_API_KEY=your_perplexity_api_key_here
 streamlit run app.py
 ```
 
+5. Run the FastAPI backend:
+
+```bash
+uvicorn apps.api.app.main:app --reload
+```
+
+The API documentation is available at `http://127.0.0.1:8000/docs` when the backend is running.
+
+6. Configure persistence for the API:
+
+```bash
+export DATABASE_URL=postgresql+psycopg://user:password@localhost:5432/truthfit
+alembic upgrade head
+```
+
+Without `DATABASE_URL`, the API uses a local SQLite database at `.truthfit/truthfit.db` for development.
+
+For a fresh database, run migrations before starting the API in step 5. Export the same `DATABASE_URL` for both commands; Alembic does not load `.env` automatically. See [database setup](docs/api.md#database) for PowerShell commands and existing-database guidance.
+
+To seed sample persisted data:
+
+```bash
+python scripts/seed_database.py
+```
+
 Runtime dependencies in `requirements.txt` and test dependencies in `requirements-dev.txt` are pinned to exact versions for repeatable local and cloud deployment.
 
 ## Tests
@@ -243,6 +278,7 @@ The test suite covers:
 - privacy-aware redaction
 - resume proof map generation
 - resume evidence scoring
+- API route contracts, database health, and persisted analysis retrieval using SQLite and mocked provider responses
 
 ## Deployment
 
@@ -267,6 +303,8 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for deployment steps.
 - The local job tracker is suitable for portfolio/demo use, not multi-user production storage.
 
 ## Roadmap
+
+The repo includes the Streamlit v1 baseline plus the first FastAPI backend and SQLAlchemy database foundation. The Next.js frontend, authenticated history, and tracker migration remain planned. The detailed phased plan is tracked in [docs/platform-roadmap.md](docs/platform-roadmap.md).
 
 ### 1. Project Recommendation Model
 
@@ -294,7 +332,7 @@ Containerize the production version with Docker after the architecture settles. 
 
 ### 7. Production Controls
 
-Add authentication, server-side provider keys, usage limits, rate limiting, persistent storage, audit logs, and clearer data-retention settings for a real public product.
+Add authentication, server-side provider keys, usage limits, rate limiting, production database operations, audit logs, and clearer data-retention settings for a real public product. API persistence is implemented; the Streamlit tracker still uses local JSON.
 
 ### 8. User Sessions and Login
 
@@ -302,7 +340,7 @@ Add user accounts so each person can save analyses, revisit job-tracker entries,
 
 ## Privacy Note
 
-TruthFit applies heuristic redaction before resume preview, proof mapping, and live analysis. Uploaded resume and job-description files are not saved by the app. Resume/JD text may still be sent to the selected AI provider during live analysis, so avoid uploading sensitive documents unless you are comfortable with that provider's data policy.
+TruthFit applies heuristic redaction before resume preview, proof mapping, and live analysis. Streamlit does not save uploaded resume and job-description files; successful API analyses persist original and redacted resume text and JD text in the configured database. Resume/JD text may still be sent to the selected AI provider during live analysis. The API has no authentication, ownership checks, or automatic retention/deletion controls yet.
 
 ## Git Hygiene
 

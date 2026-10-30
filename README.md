@@ -325,6 +325,15 @@ npm run build
 
 The current repository passes 49 Python tests, TypeScript validation, and a production Next.js build.
 
+### Continuous Integration
+
+GitHub Actions runs two independent checks on every push and pull request:
+
+- **Python:** installs the pinned dependencies on Python 3.12.8, runs `pytest -q`, and checks the repository with Ruff.
+- **Web:** installs the lockfile-pinned packages on Node.js 24, runs the TypeScript check, and creates a production Next.js build.
+
+Both jobs must pass before a product update is considered ready to merge.
+
 ## Deployment
 
 The public Streamlit v1 demo is deployed on Streamlit Community Cloud. The Next.js product interface requires the frontend, API, and database to be deployed separately.

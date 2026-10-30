@@ -769,7 +769,7 @@ select {
 
 @media (max-width: 1120px) and (min-width: 721px) {
   .kanban {
-    overflow-x: auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

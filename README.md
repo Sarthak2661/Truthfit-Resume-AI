@@ -1,15 +1,22 @@
 # TruthFit Resume AI
 
 [![Tests](https://github.com/Sarthak2661/Truthfit-Resume-AI/actions/workflows/tests.yml/badge.svg)](https://github.com/Sarthak2661/Truthfit-Resume-AI/actions/workflows/tests.yml)
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://truthfit-resume-ai-vaos6czappyfazhugbyffub.streamlit.app/)
+[![Open Streamlit v1 Demo](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://truthfit-resume-ai-vaos6czappyfazhugbyffub.streamlit.app/)
 
-**Live app:** https://truthfit-resume-ai-vaos6czappyfazhugbyffub.streamlit.app/
+**Public demo (Streamlit v1):** https://truthfit-resume-ai-vaos6czappyfazhugbyffub.streamlit.app/
 
-TruthFit Resume AI is a resume and job-fit review app with privacy-aware redaction. It compares a resume against a job description, explains the match score, checks whether resume claims are backed by real evidence, and turns gaps into practical next steps.
+TruthFit Resume AI is an evidence-grounded resume and job-fit review product. It compares a resume against a specific job description, explains the match score, checks whether important claims are backed by real evidence, and turns gaps into practical resume improvements and application actions.
 
 The goal is not to "game" an ATS or invent stronger experience. TruthFit is built around a simple idea: a resume should be tailored only with evidence that already exists in the candidate's work, projects, education, or portfolio.
 
-## Screenshots
+The repository currently contains two interfaces:
+
+- **Streamlit v1** is the deployed portfolio demo with no-API sample data, chat, PDF export, and a local job tracker.
+- **Next.js + FastAPI** is the newer product interface with combined resume/JD review, persisted analyses, Apply Readiness, inline tailoring, and an API-backed Kanban tracker. It currently runs locally and is not yet publicly deployed.
+
+## Streamlit v1 Screenshots
+
+These screenshots show the currently deployed Streamlit demo. Updated Next.js product screenshots will replace this section when the new frontend is publicly deployed.
 
 | Home | Analyze | Overview |
 | --- | --- | --- |
@@ -27,23 +34,30 @@ The goal is not to "game" an ATS or invent stronger experience. TruthFit is buil
 
 ```mermaid
 flowchart LR
-    A["Resume file<br>PDF / DOCX / TXT"] --> B["Loaders"]
-    C["Job description<br>file, paste, or link"] --> B
-    D["Project notes or GitHub links"] --> E["Prompt Builder"]
-    B --> F["Privacy Redaction"]
-    F --> E
-    E --> G["Provider Client<br>Gemini / Claude / OpenAI / Perplexity"]
-    G --> H["Structured Analysis JSON"]
-    H --> I["Normalization and Evidence Scoring"]
-    I --> J["Dashboard Sections"]
-    I --> K["PDF Report"]
-    I --> L["Local Job Tracker"]
-    M["No-API Sample Report"] --> J
+    resume["Resume<br>PDF / DOCX / TXT"] --> loaders["Validation and text extraction"]
+    jd["Job description<br>file, paste, or link"] --> loaders
+    loaders --> redact["Privacy-aware redaction"]
+    redact --> api["FastAPI services"]
+    projects["Project evidence"] --> api
+    web["Next.js product interface"] --> api
+    streamlit["Streamlit v1 demo"] --> shared["Shared domain services"]
+    api --> shared
+    shared --> providers["Gemini / Claude / OpenAI / Perplexity"]
+    providers --> schema["Structured validation and normalization"]
+    schema --> db[("PostgreSQL / SQLite")]
+    schema --> review["Fit review and tailoring"]
+    db --> history["Analysis history and job tracker"]
+    sample["No-API sample analysis"] --> streamlit
 ```
 
-TruthFit keeps the product split simple: loaders extract text, privacy redaction removes detected personal details, provider clients return structured analysis, and the UI renders the result as scores, tables, proof checks, resume improvements, export, and tracking.
+The UI layers do not contain the core analysis logic. FastAPI routes call services, services call shared parsing and analysis modules, and persistence is isolated behind SQLAlchemy repositories. The same loaders, privacy rules, provider clients, structured schemas, evidence scoring, and cleanup services can support both interfaces.
 
-The first API extraction lives under `apps/api`. It exposes parse, analysis, tailoring, health, and provider endpoints while reusing the existing parsing, privacy, provider, schema, scoring, and cleanup services.
+- `apps/web/` contains the Next.js product interface.
+- `apps/api/` contains FastAPI routes, application services, and SQLAlchemy repositories.
+- `source/ai/` contains prompts, provider clients, retry/fallback behavior, and structured schemas.
+- `source/loaders/` contains upload validation and shared file extraction.
+- `source/services/` contains evidence, scoring, reporting, privacy, tracker, URL, and observability logic.
+- `source/pages/` and `source/ui/` contain the Streamlit v1 experience.
 
 For the detailed current architecture, target v2 architecture, migration plan, and architecture decisions, see:
 
@@ -56,12 +70,15 @@ For the detailed current architecture, target v2 architecture, migration plan, a
 ## What It Does
 
 - Upload a resume as PDF, DOCX, or TXT.
-- Upload or paste a job description.
+- Upload or paste a job description on the same review screen.
 - Add the original job posting link.
 - Choose Gemini, Claude, OpenAI, or Perplexity with a bring-your-own-key setup.
-- Generate a structured job-fit report with scores, evidence, risks, and action items.
+- Extract hard requirements, preferred signals, role metadata, and ATS formatting risks.
+- Generate a structured fit review with explainable scores, evidence, risks, and priority fixes.
+- Review Apply Readiness, score drivers, requirement coverage, missing proof, and unsupported claims.
+- Accept, edit, reject, and copy evidence-grounded bullet rewrites in the Next.js tailoring workflow.
+- Save completed analyses to an API-backed Kanban tracker with role, company, location, score, notes, status, and a link back to the review.
 - Use a no-API sample report so reviewers can explore the product without adding an API key.
-- Track job applications with company, role, link, status, location, salary expectation, match score, priority, and notes.
 
 Safe demo inputs are included in [`samples/sample_resume.txt`](samples/sample_resume.txt) and [`samples/sample_job_description.txt`](samples/sample_job_description.txt). They are fictional and safe to use when testing the deployed app.
 
@@ -80,7 +97,7 @@ The demo uses synthetic data and does not call Gemini, Claude, OpenAI, or Perple
 
 TruthFit applies best-effort redaction before resume preview, proof mapping, and live provider calls. It currently targets common names, phone numbers, emails, URLs, and street-style addresses.
 
-The Streamlit app does not save uploaded resume and job-description files. It uses session text for analysis and stores local tracker data when an entry is saved. The separate FastAPI backend persists original and redacted resume text, JD text, user email, completed results, and evidence in its database when an analysis succeeds. See [API storage and access boundaries](docs/api.md#storage-and-access-boundaries).
+The Streamlit app does not save uploaded resume and job-description files. It uses session text for analysis and stores local tracker data when an entry is saved. Completed FastAPI analyses persist original and redacted resume text, JD text, the structured result, evidence records, and operational events in the configured database. Parse-only API requests are not persisted. See [API storage and access boundaries](docs/api.md#storage-and-access-boundaries).
 
 The redaction heuristic is covered by tests against several realistic resume-header layouts across US, India, UK, and GCC-style contact formats. The current fixture set redacts all checked sensitive tokens, but this is still a test-sample result, not a guarantee for every resume design.
 
@@ -98,15 +115,16 @@ This helps separate strong resume evidence from unsupported or vague claims.
 
 ### Score Explanation
 
-The dashboard shows:
+The fit review shows:
 
 - overall match
 - technical match
-- ATS keyword coverage
-- resume evidence proof
+- requirement and keyword coverage
+- resume evidence strength
 - eligibility fit
 - experience fit
 - score drivers that explain what raised or lowered the final score
+- Apply Readiness based on parser checks, requirement coverage, unsupported claims, and the top three fixes
 
 ## How Scoring Works
 
@@ -155,6 +173,8 @@ The app can generate:
 - certification suggestions
 - optional cover letter
 
+The Next.js tailoring page adds an inline bullet editor with accept, edit, reject, and copy actions. Those decisions currently remain in browser state and are not yet persisted or exported as a new resume file.
+
 ### Chat and Export
 
 After an analysis is generated, the chat helper can answer follow-up questions, draft a cover letter, suggest recruiter outreach, or explain the score. The report can also be exported as a PDF.
@@ -171,24 +191,19 @@ TruthFit logs privacy-safe operational events for local and cloud debugging:
 
 Logs intentionally exclude API keys, prompts, resume text, job descriptions, and uploaded file contents.
 
-## Dashboard Structure
+## Product Interfaces
 
-The dashboard is organized around five product sections:
+### Next.js Product Interface
 
-1. **Privacy & Overview**  
-   Scores, verdict, privacy note, score drivers, resume evidence score, and top fixes.
+- **Analyze:** resume upload, redacted preview, ATS formatting checks, JD extraction, regional targeting, and provider setup on one page.
+- **Dashboard:** recent saved analyses, average match score, recurring skill gaps, provider usage, and failed runs.
+- **Fit Review:** five score dimensions, Apply Readiness, score drivers, requirement coverage, skills evidence, unsupported claims, and tracker actions.
+- **Tailoring:** priority fixes, tailored summary, inline bullet editing, project ideas, certifications, learning steps, and optional cover letter.
+- **Tracker:** API-backed Kanban columns for Saved, Applied, Interview, and Rejected opportunities.
 
-2. **Skills & Requirements**  
-   Job details, matched/missing skills, must-have requirements, nice-to-have requirements, and collapsed keyword details.
+### Streamlit v1 Demo
 
-3. **Evidence & Risks**  
-   Proof checks, unsupported claims, eligibility risks, timeline checks, JD red flags, and an optional resume proof map.
-
-4. **Improve Resume**  
-   Tailored summary, rewritten bullets, resume fixes, project ideas, certifications, and learning plan.
-
-5. **Export & Track**  
-   PDF export, job posting link, and job-tracker shortcut.
+The deployed Streamlit interface remains available as a self-contained portfolio demo. It includes the no-API sample dashboard, five analysis sections, follow-up chat, PDF export, theme switching, and a local JSON-backed tracker.
 
 ## Tech Stack
 
@@ -204,20 +219,28 @@ The dashboard is organized around five product sections:
 - Perplexity API
 - pytest
 - GitHub Actions
+- FastAPI
+- SQLAlchemy
+- Alembic
+- PostgreSQL
+- Next.js
+- React
+- TypeScript
 
 ## Setup
 
-TruthFit is developed and tested with **Python 3.12.8**. Use the same version locally when possible; the repo also includes `.python-version` and `runtime.txt` for deployment alignment.
+TruthFit is developed and tested with **Python 3.12.8**. The repository includes `.python-version` and `runtime.txt` so local and deployment environments can use the same version.
 
-1. Create and activate a virtual environment.
+### Python Environment
 
-2. Install dependencies:
-
-```bash
+```powershell
+py -3.12 -m venv .venv
+.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
 
-3. Copy `.env.example` to `.env` for local development, or enter a provider API key in the app sidebar:
+Copy `.env.example` to `.env` for local development, or enter a temporary provider key in the interface:
 
 ```env
 GEMINI_API_KEY=your_gemini_api_key_here
@@ -226,38 +249,50 @@ OPENAI_API_KEY=your_openai_api_key_here
 PERPLEXITY_API_KEY=your_perplexity_api_key_here
 ```
 
-4. Run the app:
+### Streamlit v1
 
-```bash
+```powershell
 streamlit run app.py
 ```
 
-5. Run the FastAPI backend:
+The Streamlit app opens at `http://127.0.0.1:8501`.
 
-```bash
-uvicorn apps.api.app.main:app --reload
-```
+### Next.js + FastAPI Product Interface
 
-The API documentation is available at `http://127.0.0.1:8000/docs` when the backend is running.
+Configure persistence and apply the database migration. PostgreSQL is recommended for deployment; without `DATABASE_URL`, development uses SQLite at `.truthfit/truthfit.db`.
 
-6. Configure persistence for the API:
-
-```bash
-export DATABASE_URL=postgresql+psycopg://user:password@localhost:5432/truthfit
+```powershell
+$env:DATABASE_URL = "postgresql+psycopg://user:password@localhost:5432/truthfit"
 alembic upgrade head
 ```
 
-Without `DATABASE_URL`, the API uses a local SQLite database at `.truthfit/truthfit.db` for development.
+Start the API:
 
-For a fresh database, run migrations before starting the API in step 5. Export the same `DATABASE_URL` for both commands; Alembic does not load `.env` automatically. See [database setup](docs/api.md#database) for PowerShell commands and existing-database guidance.
-
-To seed sample persisted data:
-
-```bash
-python scripts/seed_database.py
+```powershell
+py -3.12 -m uvicorn apps.api.app.main:app --reload
 ```
 
-Runtime dependencies in `requirements.txt` and test dependencies in `requirements-dev.txt` are pinned to exact versions for repeatable local and cloud deployment.
+The Swagger UI is available at `http://127.0.0.1:8000/docs`. To seed safe sample records:
+
+```powershell
+py -3.12 scripts/seed_database.py
+```
+
+In another terminal, start the frontend:
+
+```powershell
+cd apps/web
+npm ci
+npm run dev
+```
+
+The frontend opens at `http://127.0.0.1:3000` and calls `http://127.0.0.1:8000` by default. For another API host, create `apps/web/.env.local` with:
+
+```env
+NEXT_PUBLIC_TRUTHFIT_API_URL=https://your-api-host
+```
+
+Runtime and development dependencies are pinned for repeatable local and cloud builds. See [database setup](docs/api.md#database) for additional PostgreSQL and migration guidance.
 
 ## Tests
 
@@ -278,65 +313,82 @@ The test suite covers:
 - privacy-aware redaction
 - resume proof map generation
 - resume evidence scoring
-- API route contracts, database health, and persisted analysis retrieval using SQLite and mocked provider responses
+- API route contracts, database health, persisted analysis retrieval, dashboard summaries, tracker compatibility, and mocked provider responses
+
+Validate the Next.js frontend separately:
+
+```powershell
+cd apps/web
+npm run typecheck
+npm run build
+```
+
+The current repository passes 49 Python tests, TypeScript validation, and a production Next.js build.
 
 ## Deployment
 
-TruthFit can be deployed on Streamlit Cloud or Hugging Face Spaces.
+The public Streamlit v1 demo is deployed on Streamlit Community Cloud. The Next.js product interface requires the frontend, API, and database to be deployed separately.
 
-For a portfolio deployment, the safest setup is:
+| Component | Recommended deployment |
+| --- | --- |
+| Streamlit v1 demo | Streamlit Community Cloud |
+| Next.js frontend | Vercel, Netlify, or a Node-capable container host |
+| FastAPI backend | Render, Railway, Fly.io, or a container platform |
+| PostgreSQL | Neon, Supabase, Railway, or Render |
 
-- deploy the app publicly
-- keep provider keys out of the repo
-- let visitors use the no-API sample report
-- let users enter their own provider API key for live analysis
+Keep provider keys out of the repository. The current portfolio flow supports user-provided keys; a production service should use controlled server-side keys with authentication, rate limits, and usage caps.
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for deployment steps.
 
 ## Limitations
 
 - The ATS score is an approximation, not a real ATS simulation.
+- ATS formatting checks are deterministic heuristics over extracted content and cannot reproduce every employer parser.
 - Model output can be incomplete, inconsistent, or overconfident.
 - PDF parsing can be messy for resumes with columns, tables, images, or unusual layouts.
 - Privacy redaction is heuristic and should not be treated as legal or compliance-grade anonymization.
 - Live analysis still sends redacted resume/JD text to the selected provider.
-- The local job tracker is suitable for portfolio/demo use, not multi-user production storage.
+- The API has no authentication or record-ownership checks; analysis IDs must be treated as sensitive.
+- Inline tailoring decisions are not persisted or exported as a new DOCX/PDF resume.
+- Regional targeting is an initial prompt-based mode, not a validated market-specific rules engine.
+- The Streamlit tracker is local; the Next.js tracker is database-backed but not yet multi-user safe.
+- The Next.js frontend is not yet publicly deployed.
 
 ## Roadmap
 
-The repo includes the Streamlit v1 baseline plus the first FastAPI backend and SQLAlchemy database foundation. The Next.js frontend, authenticated history, and tracker migration remain planned. The detailed phased plan is tracked in [docs/platform-roadmap.md](docs/platform-roadmap.md).
+TruthFit now includes the Streamlit v1 baseline, FastAPI services, SQLAlchemy persistence, and the first Next.js product interface. The next work is focused on making that product path safer, more persistent, and easier to deploy. The detailed phased plan is tracked in [docs/platform-roadmap.md](docs/platform-roadmap.md).
 
-### 1. Project Recommendation Model
+### 1. Authentication and User-Scoped History
 
-Build a stronger recommendation layer that maps missing role evidence to specific portfolio projects. Instead of generic project ideas, the model could suggest project scope, tech stack, resume bullet examples, difficulty, estimated timeline, and the exact job requirement each project would support.
+Add login, authenticated sessions, ownership checks, and user-scoped analysis and tracker queries. Firebase Auth is the faster product route; a SQL-backed session model offers more control over roles, subscriptions, and audit history.
 
-### 2. Role-Specific Resume Modes
+### 2. Persistent Resume Versions and Export
 
-Add focused modes for different target roles, such as Data Engineer, Data Analyst, Analytics Engineer, Software Engineer, Machine Learning Engineer, and Business Analyst. Each mode could adjust scoring weights, keyword expectations, project suggestions, and resume rewrite guidance.
+Persist accepted, edited, and rejected bullet decisions. Let each tracked job reference the exact tailored resume version used, then export that version to DOCX or PDF.
 
 ### 3. GitHub Evidence Extractor
 
 Allow users to paste GitHub repository links and automatically extract project evidence from README files, tech stacks, commits, folder structure, and documentation. This would make project suggestions and resume proof scoring more grounded in real portfolio work.
 
-### 4. Regional Targeting for India, GCC, and US Markets
+### 4. Project Recommendation Model
 
-Add region-aware resume and job-fit logic. Different markets often have different salary expectations, role titles, ATS keywords, notice-period norms, visa realities, relocation expectations, and recruiter screening patterns. A regional mode would make the analysis more practical for the selected target market.
+Build a stronger recommendation layer that maps missing role evidence to specific portfolio projects, including scope, stack, difficulty, timeline, resume bullet examples, and the exact requirement each project would support.
 
-### 5. React Frontend and API Backend
+### 5. Role and Region-Specific Review Modes
 
-Move from a Streamlit-only interface to a React frontend with a Python API backend. This would allow a more polished product experience, better state management, richer dashboard interactions, user accounts, and cleaner separation between UI and analysis services.
+Replace the current regional prompt hints with tested India, GCC, and US rules for role titles, notice periods, location and visa realities, resume conventions, and hiring terminology. Add role-specific weighting for Data Engineering, Analytics, Software Engineering, and Machine Learning.
 
-### 6. Docker-Based Deployment
+### 6. Production Provider Controls
 
-Containerize the production version with Docker after the architecture settles. If the app remains Streamlit-only, Docker is a straightforward deployment polish. If the frontend moves to React, containerization should cover the final frontend/backend setup rather than the current prototype structure.
+Add server-side provider keys, quotas, rate limiting, background jobs, durable failure events, timeout controls, and explicit data-retention and deletion settings.
 
-### 7. Production Controls
+### 7. Evaluation and Score Calibration
 
-Add authentication, server-side provider keys, usage limits, rate limiting, production database operations, audit logs, and clearer data-retention settings for a real public product. API persistence is implemented; the Streamlit tracker still uses local JSON.
+Build a versioned evaluation dataset for requirement extraction, evidence precision, unsupported-claim detection, redaction, score stability, and tailoring safety.
 
-### 8. User Sessions and Login
+### 8. Containerized Deployment and Observability
 
-Add user accounts so each person can save analyses, revisit job-tracker entries, and manage settings across sessions. A production version could use Firebase Auth for faster setup or a SQL-backed auth/session model for more control over user data, roles, subscriptions, and audit trails.
+Containerize the Next.js, FastAPI, and PostgreSQL product path. Add configurable production CORS, metrics, health monitoring, security scanning, and deployment automation.
 
 ## Privacy Note
 

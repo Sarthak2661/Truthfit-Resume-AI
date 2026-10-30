@@ -66,7 +66,9 @@ Current implementation note:
 
 ## Phase 3: Product Frontend
 
-Move to a Next.js frontend after backend contracts stop changing.
+Status: implemented as a first Next.js frontend slice.
+
+Build the product workflow on the stabilized FastAPI contracts while keeping Streamlit available as the public v1 demo.
 
 The frontend should focus on:
 
@@ -75,6 +77,20 @@ The frontend should focus on:
 - analysis history
 - job-specific result pages
 - clearer resume improvement workflows
+
+Current implementation:
+
+- `apps/web` contains a Next.js app.
+- Core routes are implemented: `/`, `/dashboard`, `/resumes`, `/jobs`, `/analysis/[id]`, `/tailor/[id]`, and `/settings/providers`.
+- The frontend calls the FastAPI backend through `NEXT_PUBLIC_TRUTHFIT_API_URL`.
+- Resume parsing, job parsing, analysis run creation, saved analysis retrieval, tailoring, provider settings, dashboard metrics, and error/loading states are covered in the UI.
+- CI typechecks and builds the web app.
+
+Remaining follow-up:
+
+- Add authenticated sessions once the auth model is decided.
+- Add richer charts after enough real persisted analysis data exists.
+- Decide whether to retire Streamlit or keep it as a simple public demo.
 
 ## Phase 4: LLM Gateway and Agent Workflow
 

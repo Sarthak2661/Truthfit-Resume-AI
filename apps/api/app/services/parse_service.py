@@ -256,24 +256,71 @@ def _check(name: str, status: str, severity: str, detail: str, recommendation: s
 
 def _extract_requirements(text: str, preferred: bool) -> list[str]:
     preferred_signals = ["preferred", "nice to have", "bonus", "plus", "would be helpful"]
-    signals = (
-        preferred_signals
-        if preferred
-        else ["required", "must", "need", "minimum", "responsible for", "experience with"]
-    )
+    hard_signals = ["required", "must", "need", "minimum", "responsible for", "experience with"]
     requirements = []
+    section: str | None = None
 
     for raw_line in re.split(r"[\n\r]+|(?<=[.;])\s+", text):
         line = raw_line.strip(" -*\t")
-        if len(line) < 12:
+        if not line:
             continue
         lower_line = line.lower()
+
+        heading_section = _requirement_heading_section(lower_line)
+        if heading_section:
+            section = heading_section
+            continue
+
+        if len(line) < 12:
+            continue
+
+        if section == "preferred":
+            if preferred:
+                requirements.append(line)
+            continue
+
+        if section == "hard":
+            if not preferred:
+                requirements.append(line)
+            continue
+
         if not preferred and any(signal in lower_line for signal in preferred_signals):
             continue
+        signals = preferred_signals if preferred else hard_signals
         if any(signal in lower_line for signal in signals):
             requirements.append(line)
 
     return requirements[:12]
+
+
+def _requirement_heading_section(line: str) -> str | None:
+    normalized = re.sub(r"[^a-z0-9+ ]", "", line).strip()
+    preferred_headings = {
+        "nice to have",
+        "nice to haves",
+        "preferred",
+        "preferred qualifications",
+        "preferred requirements",
+        "good to have",
+        "good to have skills",
+        "bonus qualifications",
+    }
+    hard_headings = {
+        "required",
+        "requirements",
+        "required qualifications",
+        "minimum qualifications",
+        "must have",
+        "must have skills",
+        "professional technical skills",
+    }
+    if normalized in preferred_headings:
+        return "preferred"
+    if normalized in hard_headings:
+        return "hard"
+    if normalized in {"about the role", "about the job", "responsibilities", "application notes"}:
+        return "other"
+    return None
 
 
 def _extract_job_title(text: str) -> str:

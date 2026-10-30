@@ -133,6 +133,35 @@ def test_parse_job_returns_hard_and_preferred_requirements(tmp_path):
     assert body["preferred_requirements"] == ["Preferred experience with Airflow orchestration."]
 
 
+def test_parse_job_respects_requirement_section_boundaries(tmp_path):
+    api = client(tmp_path)
+
+    response = api.post(
+        "/jobs/parse",
+        data={
+            "pasted_text": (
+                "Required Qualifications\n"
+                "- Strong Python and SQL skills.\n"
+                "- Experience with PostgreSQL.\n"
+                "Nice to Have\n"
+                "- Workflow orchestration experience with Airflow.\n"
+                "- Cloud deployment experience."
+            )
+        },
+    )
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["hard_requirements"] == [
+        "Strong Python and SQL skills.",
+        "Experience with PostgreSQL.",
+    ]
+    assert body["preferred_requirements"] == [
+        "Workflow orchestration experience with Airflow.",
+        "Cloud deployment experience.",
+    ]
+
+
 def test_parse_job_extracts_project_role_metadata(tmp_path):
     api = client(tmp_path)
 

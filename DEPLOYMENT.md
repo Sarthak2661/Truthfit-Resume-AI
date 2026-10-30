@@ -2,6 +2,11 @@
 
 TruthFit Resume AI can be deployed on Streamlit Cloud or Hugging Face Spaces.
 
+The repo now contains two runnable interfaces:
+
+- Streamlit v1 at `app.py`
+- Next.js frontend at `apps/web`, backed by the FastAPI API at `apps/api`
+
 ## Streamlit Cloud
 
 1. Push this project to GitHub.
@@ -56,6 +61,36 @@ alembic upgrade head
 ```
 
 If `DATABASE_URL` is not set, the API uses local SQLite at `.truthfit/truthfit.db`, which is useful for development but not for production hosting.
+
+## Next.js Frontend Deployment
+
+Deploy `apps/web` to a Next.js host such as Vercel, Netlify, or a Node-capable container platform.
+
+Set the frontend environment variable to the public API host:
+
+```text
+NEXT_PUBLIC_TRUTHFIT_API_URL=https://your-api-host
+```
+
+Build command:
+
+```bash
+npm run build
+```
+
+Install command:
+
+```bash
+npm ci
+```
+
+Root directory:
+
+```text
+apps/web
+```
+
+The Next.js app will not run the analysis workflow by itself; it requires the FastAPI backend and database to be deployed separately.
 
 ## Privacy
 

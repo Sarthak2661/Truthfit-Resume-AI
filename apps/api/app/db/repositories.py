@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
+from collections import Counter
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from apps.api.app.db.models import AgentEvent, AnalysisRun, Evidence, Job, Resume, User
@@ -159,3 +160,71 @@ def add_agent_event(
 
 def get_analysis_run(session: Session, run_id: str) -> AnalysisRun | None:
     return session.get(AnalysisRun, run_id)
+
+
+def update_tracker_status(session: Session, run: AnalysisRun, status: str, notes: str = "") -> AnalysisRun:
+    result = dict(run.result_json or {})
+    current_tracker = dict(result.get("tracker") or {})
+    result["tracker"] = {
+        **current_tracker,
+        "status": status,
+        "notes": notes if notes or "notes" not in current_tracker else current_tracker.get("notes", ""),
+        "saved": True,
+    }
+    run.result_json = result
+    session.flush()
+    return run
+
+
+def list_analysis_runs(session: Session, limit: int = 20) -> list[AnalysisRun]:
+    statement = (
+        select(AnalysisRun)
+        .order_by(AnalysisRun.created_at.desc())
+        .limit(limit)
+    )
+    return list(session.scalars(statement))
+
+
+def analysis_counts(session: Session) -> dict[str, int]:
+    total = session.scalar(select(func.count()).select_from(AnalysisRun)) or 0
+    completed = (
+        session.scalar(select(func.count()).select_from(AnalysisRun).where(AnalysisRun.status == "completed"))
+        or 0
+    )
+    failed = (
+        session.scalar(select(func.count()).select_from(AnalysisRun).where(AnalysisRun.status == "failed"))
+        or 0
+    )
+    return {"total": total, "completed": completed, "failed": failed}
+
+
+def average_completed_score(session: Session) -> float:
+    value = session.scalar(
+        select(func.avg(AnalysisRun.overall_score)).where(AnalysisRun.status == "completed")
+    )
+    return round(float(value or 0), 1)
+
+
+def provider_usage(session: Session) -> list[dict]:
+    rows = session.execute(
+        select(AnalysisRun.provider, func.count())
+        .group_by(AnalysisRun.provider)
+        .order_by(func.count().desc())
+    )
+    return [{"provider": provider, "runs": count} for provider, count in rows]
+
+
+def common_skill_gaps(session: Session, limit: int = 8) -> list[dict]:
+    gaps = Counter()
+
+    for run in session.scalars(select(AnalysisRun).where(AnalysisRun.status == "completed")):
+        missing_skills = run.result_json.get("skills_analysis", {}).get("missing_skills", [])
+        for item in missing_skills:
+            if isinstance(item, dict):
+                skill = str(item.get("skill") or item.get("requirement") or "").strip()
+            else:
+                skill = str(item).strip()
+            if skill:
+                gaps[skill] += 1
+
+    return [{"skill": skill, "count": count} for skill, count in gaps.most_common(limit)]

@@ -1,13 +1,19 @@
 from apps.api.app.db.database import session_scope
 from apps.api.app.db import repositories
 from apps.api.app.schemas import (
+    AnalysisListItem,
+    AnalysisListResponse,
     AnalysisRunRequest,
     AnalysisRunResponse,
+    DashboardSummaryResponse,
     ProviderInfo,
     ProvidersResponse,
     StoredAnalysisResponse,
     TailorRequest,
     TailorResponse,
+    TrackerItem,
+    TrackerResponse,
+    TrackerUpdateRequest,
 )
 from source.ai.llm_client import generate_resume_analysis
 from source.ai.providers import PROVIDER_MODELS
@@ -15,7 +21,7 @@ from source.ai.schemas import validate_analysis_result
 from source.services.evidence_score import add_resume_evidence_score
 from source.services.observability import timed_operation
 from source.services.resume_heatmap import redact_personal_details
-from source.services.url_utils import normalize_http_url
+from source.services.url_utils import is_valid_http_url, normalize_http_url
 from source.ui.text_cleanup import normalize_analysis_result
 
 
@@ -55,7 +61,7 @@ def run_analysis(payload: AnalysisRunRequest, request_id: str) -> AnalysisRunRes
             with timed_operation("api_analysis_run", request_id=request_id, provider=provider, model=model):
                 analysis = generate_resume_analysis(
                     resume_text=redacted_resume,
-                    job_description=payload.job_description,
+                    job_description=_regional_job_context(payload.job_description, payload.target_region),
                     include_cover_letter=payload.include_cover_letter,
                     user_projects=payload.user_projects,
                     provider=provider,
@@ -67,6 +73,9 @@ def run_analysis(payload: AnalysisRunRequest, request_id: str) -> AnalysisRunRes
             raise
 
         normalized = _finalize_analysis(analysis, payload.job_link)
+        if payload.resume_formatting_checks:
+            normalized["ats_formatting_checks"] = payload.resume_formatting_checks
+        normalized.setdefault("job_details", {})["target_region"] = payload.target_region
         repositories.complete_analysis_run(session, run, normalized)
         repositories.add_evidence_records(session, run.id, normalized)
         repositories.add_agent_event(
@@ -93,6 +102,44 @@ def get_analysis_run(run_id: str) -> StoredAnalysisResponse:
             overall_score=run.overall_score,
             analysis=run.result_json,
         )
+
+
+def list_analysis_runs(limit: int = 20) -> AnalysisListResponse:
+    with session_scope() as session:
+        runs = repositories.list_analysis_runs(session, limit=limit)
+        return AnalysisListResponse(analyses=[_analysis_list_item(run) for run in runs])
+
+
+def dashboard_summary() -> DashboardSummaryResponse:
+    with session_scope() as session:
+        counts = repositories.analysis_counts(session)
+        recent_runs = repositories.list_analysis_runs(session, limit=8)
+
+        return DashboardSummaryResponse(
+            total_runs=counts["total"],
+            completed_runs=counts["completed"],
+            failed_runs=counts["failed"],
+            average_match_score=repositories.average_completed_score(session),
+            common_skill_gaps=repositories.common_skill_gaps(session),
+            provider_usage=repositories.provider_usage(session),
+            recent_analyses=[_analysis_list_item(run) for run in recent_runs],
+        )
+
+
+def list_tracked_jobs() -> TrackerResponse:
+    with session_scope() as session:
+        runs = repositories.list_analysis_runs(session, limit=100)
+        jobs = [_tracker_item(run) for run in runs if _tracker_status(run) != "Not saved"]
+        return TrackerResponse(jobs=jobs)
+
+
+def update_tracked_job(run_id: str, payload: TrackerUpdateRequest) -> TrackerItem:
+    with session_scope() as session:
+        run = repositories.get_analysis_run(session, run_id)
+        if run is None:
+            raise ValueError(f"Analysis run not found: {run_id}")
+        repositories.update_tracker_status(session, run, payload.status, payload.notes)
+        return _tracker_item(run)
 
 
 def tailor_resume(payload: TailorRequest, request_id: str) -> TailorResponse:
@@ -139,3 +186,69 @@ def _finalize_analysis(analysis: dict, job_link: str = "") -> dict:
         normalized.setdefault("job_details", {})["job_link"] = normalize_http_url(job_link)
 
     return normalized
+
+
+def _regional_job_context(job_description: str, target_region: str) -> str:
+    notes = {
+        "US": "Target region: US. Consider US role titles, authorization language, location constraints, and common ATS keyword phrasing.",
+        "India": "Target region: India. Consider India role titles, notice period context, city/hybrid requirements, and local hiring terminology.",
+        "GCC": "Target region: GCC. Consider Gulf region relocation, visa sponsorship, regional domain expectations, and employer-location fit.",
+        "Canada/Europe": "Target region: Canada/Europe. Treat this as a future/experimental targeting mode and call out uncertain regional assumptions.",
+    }
+    return f"{notes.get(target_region, notes['US'])}\n\n{job_description}"
+
+
+def _tracker_item(run) -> TrackerItem:
+    analysis = run.result_json or {}
+    job_details = analysis.get("job_details", {}) if isinstance(analysis.get("job_details"), dict) else {}
+    tracker = analysis.get("tracker", {}) if isinstance(analysis.get("tracker"), dict) else {}
+    raw_job_link = str(job_details.get("job_link") or "").strip()
+    job_link = raw_job_link if is_valid_http_url(raw_job_link) else ""
+    return TrackerItem(
+        run_id=run.id,
+        role=(run.job.title if run.job else "") or job_details.get("job_title") or "Untitled role",
+        company=(run.job.company if run.job else "") or job_details.get("company_name") or "Company not specified",
+        location=str(job_details.get("location_or_work_policy") or ""),
+        job_link=job_link,
+        match_score=run.overall_score,
+        tracker_status=_tracker_status(run),
+        notes=str(tracker.get("notes") or ""),
+        top_fixes=_top_fixes(analysis),
+        analysis_url=f"/analysis/{run.id}",
+        created_at=run.created_at.isoformat(),
+    )
+
+
+def _tracker_status(run) -> str:
+    tracker = (run.result_json or {}).get("tracker", {})
+    if isinstance(tracker, dict):
+        return str(tracker.get("status") or "Not saved")
+    return "Not saved"
+
+
+def _top_fixes(analysis: dict) -> list[str]:
+    fixes = analysis.get("fix_impact_matrix", [])
+    if not isinstance(fixes, list):
+        return []
+
+    top_fixes = []
+    for item in fixes[:3]:
+        if isinstance(item, dict):
+            top_fixes.append(str(item.get("fix") or item.get("recommendation") or item.get("issue") or "Recommended fix"))
+        else:
+            top_fixes.append(str(item))
+    return top_fixes
+
+
+def _analysis_list_item(run) -> AnalysisListItem:
+    return AnalysisListItem(
+        run_id=run.id,
+        status=run.status,
+        provider=run.provider,
+        model=run.model,
+        overall_score=run.overall_score,
+        job_title=run.job.title if run.job else "",
+        company=run.job.company if run.job else "",
+        created_at=run.created_at.isoformat(),
+        completed_at=run.completed_at.isoformat() if run.completed_at else None,
+    )

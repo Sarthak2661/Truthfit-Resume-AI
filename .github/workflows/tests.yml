@@ -28,3 +28,29 @@ jobs:
 
       - name: Run lint
         run: ruff check .
+
+  web:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install web dependencies
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Typecheck web app
+        working-directory: apps/web
+        run: npm run typecheck
+
+      - name: Build web app
+        working-directory: apps/web
+        run: npm run build

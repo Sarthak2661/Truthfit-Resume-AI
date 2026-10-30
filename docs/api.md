@@ -21,9 +21,11 @@ OpenAPI and Swagger UI are available at:
 | `POST` | `/resumes/parse` | Parse a resume upload and return original plus redacted text. |
 | `POST` | `/jobs/parse` | Parse a job description upload, pasted JD text, and optional job link. |
 | `POST` | `/analysis/run` | Run the complete TruthFit analysis through the provider pipeline. |
+| `GET` | `/analysis` | List recent saved analyses for dashboard/history views. |
 | `GET` | `/analysis/{run_id}` | Retrieve a saved analysis, status, provider/model, and overall score from the database. |
 | `POST` | `/tailor` | Return resume tailoring sections from an existing analysis or a fresh run. |
 | `GET` | `/providers` | List supported LLM providers, models, and defaults. |
+| `GET` | `/dashboard/summary` | Return recent analyses, average score, common gaps, provider usage, and failed-run counts. |
 
 ## Service Boundaries
 
@@ -33,6 +35,18 @@ Routes call service modules instead of embedding business logic directly:
 - `apps/api/app/services/parse_service.py` adapts FastAPI uploads to the existing loaders and redaction service.
 - `apps/api/app/services/analysis_service.py` runs analysis, normalizes output, applies evidence scoring, stores runs, and returns tailoring sections.
 - `source/ai`, `source/loaders`, and `source/services` remain the shared business logic used by both Streamlit and the API.
+
+## Frontend
+
+The Next.js frontend lives in `apps/web` and calls this backend through `NEXT_PUBLIC_TRUTHFIT_API_URL`.
+
+```bash
+cd apps/web
+npm install
+npm run dev
+```
+
+Open `http://127.0.0.1:3000` after the FastAPI backend is running.
 
 ## Current Limitations
 
@@ -77,7 +91,7 @@ Run migrations on a fresh database before starting the API. API startup also cre
 ### Storage and access boundaries
 
 - Successful analysis runs persist the original and redacted resume text, filename, JD text, user email, result JSON, evidence rows, and completion event. Parse-only endpoints do not persist uploads.
-- Saved runs survive API restarts when the same database is retained. There is no history-listing UI or endpoint yet; retrieve a run by its ID.
+- Saved runs survive API restarts when the same database is retained. The Next.js dashboard uses `/analysis` and `/dashboard/summary` to show recent runs without rerunning the model.
 - `user_email` associates records with a user row but is not authentication. Omitted emails share the anonymous user. Retrieval currently has no ownership check, so keep this API in a trusted development environment until access controls are added.
 - Failed analysis transactions roll back, including their failure event; durable failure history is not implemented.
 - The Streamlit app still uses session analysis state and its separate local JSON tracker. It does not use the API database.

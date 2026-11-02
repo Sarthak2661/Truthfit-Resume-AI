@@ -18,7 +18,20 @@ Phase 0 established the production boundary: explicit API configuration, validat
 
 Phase 1 added Supabase email authentication and ownership enforcement. FastAPI verifies access tokens, maps the JWT subject to `users.auth_subject`, protects product workflows, scopes repository reads and writes by `user_id`, and returns `404` for cross-account record IDs. Automated tests cover missing authentication and account isolation.
 
-Remaining security work belongs to later production phases: rate limiting, controlled server-side provider keys, encrypted retained originals, retention/deletion workflows, and security monitoring.
+Phase 3 now covers redacted-only persistence, encrypted retained originals, retention/deletion workflows, and queued-key isolation. Remaining security work includes rate limiting, quotas, abuse controls, key rotation, and security monitoring.
+
+## Privacy Phase 3: Retention And Deletion
+
+Status: implemented.
+
+- Resume originals remain transient by default; the database stores the redacted copy.
+- Explicit retention uses AES-GCM with a server-managed 32-byte key.
+- Users can inspect their stored record counts and delete one analysis or all TruthFit application data.
+- Pending, failed, and completed runs receive configurable expiry dates.
+- A cleanup command is available for a daily platform scheduler.
+- Browser BYOK credentials stay in React memory. Production RQ accepts only server-managed provider credentials.
+
+Operational follow-up: define a key-rotation procedure, schedule cleanup in each deployed environment, and add retention audit metrics.
 
 ## Reliability Phase 2: Analysis Lifecycle
 
@@ -157,4 +170,4 @@ A strong demo should show:
 6. Show tests and GitHub Actions.
 7. Explain the architecture and migration path in two minutes.
 
-Do not claim production readiness until auth, production database deployment and validation, rate limits, server-side key controls, stronger redaction, and data-retention controls are implemented.
+Do not claim full production readiness until the hosted PostgreSQL/RQ path is validated, cleanup is scheduled, rate limits and quotas are enforced, key rotation is documented, and redaction is evaluated against a broader corpus.

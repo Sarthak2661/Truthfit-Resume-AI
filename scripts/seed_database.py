@@ -28,7 +28,6 @@ def main() -> None:
             session=session,
             user_id=user.id,
             file_name="sample_resume.txt",
-            parsed_text=resume_text,
             redacted_text=redact_personal_details(resume_text),
         )
         job = repositories.create_job(

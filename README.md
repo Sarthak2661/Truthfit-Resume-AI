@@ -16,13 +16,14 @@ The repository currently contains two interfaces:
 
 ## Current Product Status
 
-The first three security and reliability phases of the Next.js/FastAPI product path are complete:
+The first four security and reliability phases of the Next.js/FastAPI product path are complete:
 
 | Phase | Status | Delivered |
 | --- | --- | --- |
 | Reliability Phase 0: containment | Complete | Production API URL validation, environment-driven CORS, recoverable client errors, removal of public development labels, and fail-fast production configuration. |
 | Reliability Phase 1: authentication and ownership | Complete | Supabase email authentication, JWT verification in FastAPI, protected product routes, authenticated user mapping, user-scoped repositories, cross-account `404` responses, and ownership isolation tests. |
 | Reliability Phase 2: analysis lifecycle | Complete | Durable pending, processing, completed, and failed states; `202 Accepted` analysis requests; client polling; typed provider errors; independently committed failure events; and Redis/RQ production dispatch. |
+| Privacy Phase 3: retention and deletion | Complete | Redacted-only default persistence, optional AES-GCM encrypted originals, per-analysis and account-data deletion, configurable expiry, cleanup tooling, and memory-only browser BYOK credentials. |
 
 Supabase stores login identities in its managed `auth.users` table, visible under **Authentication > Users**. TruthFit stores its application user record and owned analyses in the database selected by `DATABASE_URL`. A local `DATABASE_URL` therefore keeps application tables in local PostgreSQL even though authentication is handled by Supabase.
 
@@ -111,7 +112,7 @@ The demo uses synthetic data and does not call Gemini, Claude, OpenAI, or Perple
 
 TruthFit applies best-effort redaction before resume preview, proof mapping, and live provider calls. It currently targets common names, phone numbers, emails, URLs, and street-style addresses.
 
-The Streamlit app does not save uploaded resume and job-description files. It uses session text for analysis and stores local tracker data when an entry is saved. Completed FastAPI analyses persist original and redacted resume text, JD text, the structured result, evidence records, and operational events in the configured database. Parse-only API requests are not persisted. See [API storage and access boundaries](docs/api.md#storage-and-access-boundaries).
+The Streamlit app does not save uploaded resume and job-description files. It uses session text for analysis and stores local tracker data when an entry is saved. Completed FastAPI analyses store redacted resume text by default, plus JD text, the structured result, evidence records, and operational events. Original resume text remains transient unless the account explicitly enables encrypted retention. Parse-only API requests are not persisted. See [API storage and access boundaries](docs/api.md#storage-and-access-boundaries).
 
 The redaction heuristic is covered by tests against several realistic resume-header layouts across US, India, UK, and GCC-style contact formats. The current fixture set redacts all checked sensitive tokens, but this is still a test-sample result, not a guarantee for every resume design.
 
@@ -414,7 +415,7 @@ TruthFit now includes the Streamlit v1 baseline, FastAPI services, SQLAlchemy pe
 
 ### 1. Security and User-Scoped History
 
-Phase 0 reliability controls and Phase 1 ownership enforcement are implemented. Supabase Auth, FastAPI JWT verification, authenticated sessions, protected routes, and user-scoped analysis and tracker queries are covered by tests. The next security work is rate limiting, server-side provider-key controls, retention, deletion, and encrypted storage for any retained original resume text.
+Phases 0-3 now cover production configuration, account ownership, durable analysis state, redacted-only storage, optional encrypted retention, and user-controlled deletion. The next security work is rate limiting, abuse controls, managed provider quotas, key rotation, and security monitoring.
 
 ### 2. Persistent Resume Versions and Export
 
@@ -434,7 +435,7 @@ Replace the current regional prompt hints with tested India, GCC, and US rules f
 
 ### 6. Production Provider Controls
 
-Add server-side provider keys, quotas, rate limiting, background jobs, durable failure events, timeout controls, and explicit data-retention and deletion settings.
+Add managed provider quotas, rate limiting, abuse controls, per-account usage reporting, and security monitoring. Production RQ runs already use server-managed provider credentials and reject browser-provided keys.
 
 ### 7. Evaluation and Score Calibration
 
@@ -446,7 +447,7 @@ Containerize the Next.js, FastAPI, and PostgreSQL product path. Add configurable
 
 ## Privacy Note
 
-TruthFit applies heuristic redaction before resume preview, proof mapping, and live analysis. Streamlit does not save uploaded resume and job-description files; successful API analyses persist original and redacted resume text and JD text in the configured database. Resume/JD text may still be sent to the selected AI provider during live analysis. The API enforces authenticated record ownership, but automatic retention, deletion, and encrypted original-text storage are not implemented yet.
+TruthFit applies heuristic redaction before resume preview, proof mapping, and live analysis. Streamlit does not save uploaded files. FastAPI stores redacted resume text by default; users may explicitly retain an AES-GCM encrypted original when the server has a retention key configured. JD text and structured results remain persisted until the run expires or the user deletes them. Resume/JD text may still be sent to the selected provider during live analysis. Redaction is best-effort, not compliance-grade anonymization.
 
 ## Git Hygiene
 

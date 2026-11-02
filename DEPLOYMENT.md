@@ -7,7 +7,7 @@ The repo now contains two runnable interfaces:
 - Streamlit v1 at `app.py`
 - Next.js frontend at `apps/web`, backed by the FastAPI API at `apps/api`
 
-The product path includes Phase 0 reliability controls, Phase 1 authentication/ownership, and the Phase 2 durable analysis lifecycle. FastAPI validates Supabase access tokens, scopes persisted records to the verified account, and moves production provider work to Redis/RQ.
+The product path includes Phase 0 reliability controls, Phase 1 authentication/ownership, the Phase 2 durable analysis lifecycle, and Phase 3 privacy controls. FastAPI validates Supabase access tokens, scopes records to the verified account, stores redacted resume text by default, and moves production provider work to Redis/RQ.
 
 ## Streamlit Cloud
 
@@ -56,6 +56,11 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_JWT_AUDIENCE=authenticated
 TRUTHFIT_ANALYSIS_QUEUE=rq
 REDIS_URL=rediss://your-private-redis-host:6379/0
+TRUTHFIT_RETENTION_DAYS=30
+TRUTHFIT_PENDING_RETENTION_DAYS=1
+TRUTHFIT_FAILED_RETENTION_DAYS=7
+TRUTHFIT_CLEANUP_ENABLED=true
+TRUTHFIT_RETENTION_ENCRYPTION_KEY=base64-encoded-32-byte-key
 ```
 
 Use the same database URL for both the migration process and API process. Alembic loads the repository root `.env`, while an explicitly exported environment variable takes precedence. See [database setup](docs/api.md#database) for PowerShell instructions and handling an existing database.
@@ -74,7 +79,21 @@ Run one or more analysis workers separately from the API web process:
 rq worker --url "$REDIS_URL" truthfit-analysis
 ```
 
-Local development can keep `TRUTHFIT_ANALYSIS_QUEUE=background` and does not need Redis. Public deployments should use private TLS Redis with authentication. The current BYOK flow places the temporary provider key in the queued job payload, so restrict Redis access and keep job/result retention short.
+Local development can keep `TRUTHFIT_ANALYSIS_QUEUE=background` and does not need Redis. Public RQ deployments use server-managed provider credentials; browser-provided keys are rejected and are not placed in Redis payloads. Use private TLS Redis with authentication regardless.
+
+Run retention cleanup daily through the hosting platform's scheduler or cron service:
+
+```bash
+python scripts/cleanup_expired_data.py
+```
+
+Generate the optional retention key once and store it only in the API secret manager:
+
+```powershell
+python -c "import base64,secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())"
+```
+
+Losing or rotating this key without a re-encryption procedure makes retained originals unreadable. The key is not needed when original-resume retention is disabled.
 
 ### Authentication data versus application data
 
@@ -122,4 +141,4 @@ The Next.js app will not run the analysis workflow by itself; it requires the Fa
 
 Resume and job description text may be sent to the selected provider during live analysis. Do not upload sensitive documents unless you are comfortable sending that content to the selected provider.
 
-The API stores original and redacted resume text, JD text, authenticated owner, results, and evidence on successful analyses. Ownership is enforced, but encryption, retention, and account-deletion controls still need to be configured before using sensitive real-world data. Streamlit's session-only analysis and local JSON tracker remain separate from this database.
+The API stores redacted resume text by default. Original resume text is transient unless the user explicitly enables retention, in which case it is encrypted with AES-GCM. Users can delete individual analyses or all TruthFit application data from Settings. The account-data action does not delete the Supabase login identity. Retention cleanup must be scheduled by the deployment platform. Streamlit's session-only analysis and local JSON tracker remain separate.

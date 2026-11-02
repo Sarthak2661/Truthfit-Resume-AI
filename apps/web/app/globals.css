@@ -1416,6 +1416,63 @@ html[data-theme="dark"] .success {
   to { transform: translateX(340%); }
 }
 
+.privacy-retention-option {
+  align-items: flex-start;
+  display: flex;
+  gap: 0.75rem;
+}
+
+.privacy-retention-option span {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.privacy-data-card {
+  max-width: 54rem;
+}
+
+.privacy-data-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 1.25rem 0;
+}
+
+.privacy-data-grid div {
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: grid;
+  gap: 0.2rem;
+  padding: 1rem;
+}
+
+.privacy-data-grid strong {
+  font-size: 1.5rem;
+}
+
+.privacy-data-grid span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.button.danger {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: #fff;
+}
+
+.button.danger.secondary {
+  background: transparent;
+  color: var(--bad);
+}
+
+@media (max-width: 720px) {
+  .privacy-data-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 1120px) and (min-width: 721px) {
   .kanban {
     grid-template-columns: repeat(2, minmax(0, 1fr));

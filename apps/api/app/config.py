@@ -42,6 +42,37 @@ def redis_url() -> str:
     return value
 
 
+def retention_days(status: str = "completed") -> int:
+    variable = {
+        "pending": "TRUTHFIT_PENDING_RETENTION_DAYS",
+        "processing": "TRUTHFIT_PENDING_RETENTION_DAYS",
+        "failed": "TRUTHFIT_FAILED_RETENTION_DAYS",
+        "completed": "TRUTHFIT_RETENTION_DAYS",
+    }.get(status, "TRUTHFIT_RETENTION_DAYS")
+    default = {"pending": 1, "processing": 1, "failed": 7}.get(status, 30)
+    raw_value = (os.getenv(variable) or str(default)).strip()
+    try:
+        value = int(raw_value)
+    except ValueError as exc:
+        raise RuntimeError(f"{variable} must be a positive integer.") from exc
+    if value < 1 or value > 3650:
+        raise RuntimeError(f"{variable} must be between 1 and 3650 days.")
+    return value
+
+
+def retention_cleanup_enabled() -> bool:
+    return (os.getenv("TRUTHFIT_CLEANUP_ENABLED") or "true").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def retention_encryption_key() -> str:
+    return (os.getenv("TRUTHFIT_RETENTION_ENCRYPTION_KEY") or "").strip()
+
+
 def allowed_cors_origins() -> list[str]:
     raw_origins = (os.getenv("TRUTHFIT_ALLOWED_ORIGINS") or "").strip()
     if not raw_origins:

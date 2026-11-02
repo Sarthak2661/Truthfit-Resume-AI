@@ -19,6 +19,8 @@ const links = [
 const themeScript = `
   (() => {
     try {
+      sessionStorage.removeItem("truthfit.apiKey");
+      localStorage.removeItem("truthfit.apiKey");
       const saved = localStorage.getItem("truthfit-theme");
       const preferred = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
       document.documentElement.dataset.theme = saved === "dark" || saved === "light" ? saved : preferred;

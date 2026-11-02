@@ -1,5 +1,6 @@
 import { ErrorPanel } from "../../../components/ErrorPanel";
 import { getProviders } from "../../../lib/api";
+import { AccountDataControls } from "../../../components/AccountDataControls";
 
 export default async function ProvidersPage() {
   try {
@@ -34,6 +35,9 @@ export default async function ProvidersPage() {
               </table>
             </div>
           ))}
+        </div>
+        <div className="section">
+          <AccountDataControls />
         </div>
       </section>
     );

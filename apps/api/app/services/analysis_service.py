@@ -27,6 +27,7 @@ from source.ai.schemas import validate_analysis_result
 from source.services.evidence_score import add_resume_evidence_score
 from source.services.observability import log_warning, timed_operation
 from source.services.resume_heatmap import redact_personal_details
+from source.services.privacy_storage import encrypt_retained_text
 from source.services.url_utils import is_valid_http_url, normalize_http_url
 from source.ui.text_cleanup import normalize_analysis_result
 
@@ -39,6 +40,10 @@ def create_pending_analysis(
     provider = payload.provider
     model = payload.model or PROVIDER_MODELS[provider][0]
     redacted_resume = redact_personal_details(payload.resume_text)
+    encrypted_original = None
+    encryption_nonce = None
+    if payload.retain_original_resume:
+        encrypted_original, encryption_nonce = encrypt_retained_text(payload.resume_text)
 
     with session_scope() as session:
         user = repositories.get_or_create_user(
@@ -50,8 +55,9 @@ def create_pending_analysis(
             session=session,
             user_id=user.id,
             file_name=payload.resume_file_name,
-            parsed_text=payload.resume_text,
             redacted_text=redacted_resume,
+            encrypted_original=encrypted_original,
+            encryption_nonce=encryption_nonce,
         )
 
         job = repositories.create_job(
@@ -84,6 +90,15 @@ def create_pending_analysis(
         status="pending",
         status_url=f"/analysis/{run_id}",
     )
+
+
+def build_analysis_task_payload(payload: AnalysisRunRequest, server_managed_key: bool) -> dict:
+    task_payload = payload.model_dump()
+    task_payload["resume_text"] = redact_personal_details(payload.resume_text)
+    task_payload["retain_original_resume"] = False
+    if server_managed_key:
+        task_payload["api_key"] = ""
+    return task_payload
 
 
 def process_analysis_run(run_id: str, payload_data: dict, request_id: str) -> None:

@@ -66,6 +66,7 @@ class AnalysisRunRequest(BaseModel):
     company: str = ""
     resume_formatting_checks: list[dict[str, Any]] = Field(default_factory=list)
     target_region: str = "US"
+    retain_original_resume: bool = False
 
     @field_validator("provider")
     @classmethod
@@ -199,6 +200,19 @@ class StoredAnalysisResponse(BaseModel):
     model: str
     overall_score: int
     analysis: dict[str, Any]
+
+
+class AccountDataResponse(BaseModel):
+    analyses: int
+    resumes: int
+    jobs: int
+    retained_originals: int
+    oldest_record: str | None = None
+    retention_days: int
+
+
+class DataDeletionResponse(BaseModel):
+    deleted: dict[str, int]
 
 
 class TailorRequest(BaseModel):

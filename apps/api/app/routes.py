@@ -2,11 +2,14 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPExcepti
 
 from apps.api.app.auth import CurrentUser, get_current_user
 from apps.api.app.analysis_queue import enqueue_analysis
+from apps.api.app.config import analysis_queue_backend
 
 from apps.api.app.schemas import (
     AnalysisRunRequest,
     AnalysisRunResponse,
     AnalysisListResponse,
+    AccountDataResponse,
+    DataDeletionResponse,
     DashboardSummaryResponse,
     HealthResponse,
     JobParseResponse,
@@ -27,11 +30,17 @@ from apps.api.app.services.analysis_service import (
     list_providers,
     list_tracked_jobs,
     create_pending_analysis,
+    build_analysis_task_payload,
     fail_pending_analysis,
     tailor_resume,
     update_tracked_job,
 )
 from apps.api.app.services.parse_service import parse_job_description, parse_resume
+from apps.api.app.services.privacy_service import (
+    delete_account_data,
+    delete_owned_analysis,
+    inspect_account_data,
+)
 
 router = APIRouter()
 
@@ -79,6 +88,12 @@ def run_analysis_endpoint(
     background_tasks: BackgroundTasks,
     current_user: CurrentUser = Depends(get_current_user),
 ) -> AnalysisRunResponse:
+    use_server_key = analysis_queue_backend() == "rq"
+    if use_server_key and payload.api_key:
+        raise HTTPException(
+            status_code=400,
+            detail="Public queued analysis uses server-managed provider credentials. Remove the BYOK key.",
+        )
     accepted = create_pending_analysis(
         payload=payload,
         request_id=request.state.request_id,
@@ -88,7 +103,7 @@ def run_analysis_endpoint(
         enqueue_analysis(
             background_tasks=background_tasks,
             run_id=accepted.run_id,
-            payload=payload.model_dump(),
+            payload=build_analysis_task_payload(payload, server_managed_key=use_server_key),
             request_id=request.state.request_id,
         )
     except Exception as exc:
@@ -98,6 +113,28 @@ def run_analysis_endpoint(
         )
         raise HTTPException(status_code=503, detail="The analysis queue is unavailable.") from exc
     return accepted
+
+
+@router.delete("/analysis/{run_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["analysis"])
+def delete_analysis_endpoint(
+    run_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> None:
+    delete_owned_analysis(run_id, current_user)
+
+
+@router.get("/account/data", response_model=AccountDataResponse, tags=["privacy"])
+def account_data_endpoint(
+    current_user: CurrentUser = Depends(get_current_user),
+) -> AccountDataResponse:
+    return inspect_account_data(current_user)
+
+
+@router.delete("/account/data", response_model=DataDeletionResponse, tags=["privacy"])
+def delete_account_data_endpoint(
+    current_user: CurrentUser = Depends(get_current_user),
+) -> DataDeletionResponse:
+    return delete_account_data(current_user)
 
 
 @router.get("/analysis", response_model=AnalysisListResponse, tags=["analysis"])

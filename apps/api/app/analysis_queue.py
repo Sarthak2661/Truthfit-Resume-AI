@@ -13,11 +13,13 @@ def enqueue_analysis(
         from redis import Redis
         from rq import Queue
 
+        safe_payload = dict(payload)
+        safe_payload["api_key"] = ""
         queue = Queue("truthfit-analysis", connection=Redis.from_url(redis_url()))
         queue.enqueue(
             "apps.api.app.tasks.process_analysis_task",
             run_id,
-            payload,
+            safe_payload,
             request_id,
             job_timeout=240,
             result_ttl=3600,

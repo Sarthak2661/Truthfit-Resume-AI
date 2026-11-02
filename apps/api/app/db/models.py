@@ -37,8 +37,11 @@ class Resume(Base):
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
     file_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    parsed_text: Mapped[str] = mapped_column(Text, nullable=False)
+    parsed_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     redacted_text: Mapped[str] = mapped_column(Text, nullable=False)
+    encrypted_original: Mapped[str | None] = mapped_column(Text, nullable=True)
+    encryption_nonce: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    original_retained: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
     user: Mapped[User] = relationship(back_populates="resumes")
@@ -73,6 +76,7 @@ class AnalysisRun(Base):
     result_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True, nullable=False)
 
     user: Mapped[User] = relationship(back_populates="analysis_runs")
     resume: Mapped[Resume] = relationship(back_populates="analysis_runs")

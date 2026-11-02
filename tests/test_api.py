@@ -534,3 +534,210 @@ def test_cross_user_analysis_and_tracker_access_returns_404(monkeypatch, tmp_pat
     assert api.get("/analysis").json()["analyses"] == []
     assert api.get("/tracker").json()["jobs"] == []
     assert api.get("/dashboard/summary").json()["total_runs"] == 0
+
+
+def test_analysis_persists_redacted_resume_only_by_default(monkeypatch, tmp_path):
+    from sqlalchemy import select
+
+    from apps.api.app.db.database import session_scope
+    from apps.api.app.db.models import Resume
+    from apps.api.app.services import analysis_service
+
+    monkeypatch.setattr(analysis_service, "generate_resume_analysis", lambda **_: sample_analysis())
+    api = client(tmp_path)
+    original = "Sarthak Srivastava\nsarthak@example.com\n+91 99841 50955\nPython SQL"
+
+    response = api.post(
+        "/analysis/run",
+        json={
+            "resume_text": original,
+            "job_description": "Data Engineer with Python and SQL",
+            "provider": "Gemini",
+        },
+    )
+
+    assert response.status_code == 202
+    with session_scope() as session:
+        resume = session.scalar(select(Resume))
+        assert resume is not None
+        assert resume.parsed_text is None
+        assert resume.encrypted_original is None
+        assert resume.encryption_nonce is None
+        assert resume.original_retained is False
+        assert "sarthak@example.com" not in resume.redacted_text
+        assert "99841" not in resume.redacted_text
+
+
+def test_explicit_retention_encrypts_original_resume(monkeypatch, tmp_path):
+    import base64
+    import os
+
+    from sqlalchemy import select
+
+    from apps.api.app.db.database import session_scope
+    from apps.api.app.db.models import Resume
+    from apps.api.app.services import analysis_service
+    from source.services.privacy_storage import decrypt_retained_text
+
+    monkeypatch.setenv(
+        "TRUTHFIT_RETENTION_ENCRYPTION_KEY",
+        base64.urlsafe_b64encode(os.urandom(32)).decode("ascii"),
+    )
+    monkeypatch.setattr(analysis_service, "generate_resume_analysis", lambda **_: sample_analysis())
+    api = client(tmp_path)
+    original = "Private resume with candidate@example.com and Python experience"
+
+    response = api.post(
+        "/analysis/run",
+        json={
+            "resume_text": original,
+            "job_description": "Data Engineer with Python",
+            "provider": "Gemini",
+            "retain_original_resume": True,
+        },
+    )
+
+    assert response.status_code == 202
+    with session_scope() as session:
+        resume = session.scalar(select(Resume))
+        assert resume is not None
+        assert resume.parsed_text is None
+        assert resume.original_retained is True
+        assert original not in resume.encrypted_original
+        assert decrypt_retained_text(resume.encrypted_original, resume.encryption_nonce) == original
+
+
+def test_account_summary_and_owned_analysis_deletion(monkeypatch, tmp_path):
+    from sqlalchemy import func, select
+
+    from apps.api.app.db.database import session_scope
+    from apps.api.app.db.models import AgentEvent, AnalysisRun, Evidence, Job, Resume
+    from apps.api.app.services import analysis_service
+
+    monkeypatch.setattr(analysis_service, "generate_resume_analysis", lambda **_: sample_analysis())
+    api = client(tmp_path)
+    created = api.post(
+        "/analysis/run",
+        json={
+            "resume_text": "candidate@example.com\nPython SQL",
+            "job_description": "Data Engineer with Python and SQL",
+            "provider": "Gemini",
+        },
+    )
+    run_id = created.json()["run_id"]
+
+    summary = api.get("/account/data")
+    assert summary.status_code == 200
+    assert summary.json()["analyses"] == 1
+    assert summary.json()["resumes"] == 1
+    assert summary.json()["jobs"] == 1
+
+    deleted = api.delete(f"/analysis/{run_id}")
+    assert deleted.status_code == 204
+    assert api.get(f"/analysis/{run_id}").status_code == 404
+    with session_scope() as session:
+        assert session.scalar(select(func.count()).select_from(AnalysisRun)) == 0
+        assert session.scalar(select(func.count()).select_from(Resume)) == 0
+        assert session.scalar(select(func.count()).select_from(Job)) == 0
+        assert session.scalar(select(func.count()).select_from(Evidence)) == 0
+        assert session.scalar(select(func.count()).select_from(AgentEvent)) == 0
+
+
+def test_cross_user_cannot_delete_analysis(monkeypatch, tmp_path):
+    from apps.api.app.services import analysis_service
+
+    monkeypatch.setattr(analysis_service, "generate_resume_analysis", lambda **_: sample_analysis())
+    api = client(tmp_path, TEST_USER_A)
+    created = api.post(
+        "/analysis/run",
+        json={
+            "resume_text": "Python SQL",
+            "job_description": "Data Engineer with Python and SQL",
+            "provider": "Gemini",
+        },
+    )
+    run_id = created.json()["run_id"]
+
+    api.app.dependency_overrides[get_current_user] = lambda: TEST_USER_B
+
+    assert api.delete(f"/analysis/{run_id}").status_code == 404
+    api.app.dependency_overrides[get_current_user] = lambda: TEST_USER_A
+    assert api.get(f"/analysis/{run_id}").status_code == 200
+
+
+def test_account_data_deletion_removes_application_records(monkeypatch, tmp_path):
+    from sqlalchemy import func, select
+
+    from apps.api.app.db.database import session_scope
+    from apps.api.app.db.models import AnalysisRun, Job, Resume, User
+    from apps.api.app.services import analysis_service
+
+    monkeypatch.setattr(analysis_service, "generate_resume_analysis", lambda **_: sample_analysis())
+    api = client(tmp_path)
+    api.post(
+        "/analysis/run",
+        json={
+            "resume_text": "Python SQL",
+            "job_description": "Data Engineer with Python and SQL",
+            "provider": "Gemini",
+        },
+    )
+
+    deleted = api.delete("/account/data")
+
+    assert deleted.status_code == 200
+    assert deleted.json()["deleted"] == {"analyses": 1, "resumes": 1, "jobs": 1}
+    with session_scope() as session:
+        assert session.scalar(select(func.count()).select_from(User)) == 0
+        assert session.scalar(select(func.count()).select_from(AnalysisRun)) == 0
+        assert session.scalar(select(func.count()).select_from(Resume)) == 0
+        assert session.scalar(select(func.count()).select_from(Job)) == 0
+
+
+def test_expired_analysis_cleanup_respects_retention_flag(monkeypatch, tmp_path):
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import select
+
+    from apps.api.app.db.database import session_scope
+    from apps.api.app.db.models import AnalysisRun
+    from apps.api.app.services import analysis_service
+    from apps.api.app.services.privacy_service import cleanup_expired_data
+
+    monkeypatch.setenv("TRUTHFIT_CLEANUP_ENABLED", "true")
+    monkeypatch.setattr(analysis_service, "generate_resume_analysis", lambda **_: sample_analysis())
+    api = client(tmp_path)
+    created = api.post(
+        "/analysis/run",
+        json={
+            "resume_text": "Python SQL",
+            "job_description": "Data Engineer with Python and SQL",
+            "provider": "Gemini",
+        },
+    )
+    run_id = created.json()["run_id"]
+    with session_scope() as session:
+        run = session.get(AnalysisRun, run_id)
+        run.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+
+    assert cleanup_expired_data() == {"analyses": 1, "resumes": 1, "jobs": 1}
+    with session_scope() as session:
+        assert session.scalar(select(AnalysisRun).where(AnalysisRun.id == run_id)) is None
+
+
+def test_rq_queue_rejects_browser_api_keys_before_creating_run(monkeypatch, tmp_path):
+    monkeypatch.setenv("TRUTHFIT_ANALYSIS_QUEUE", "rq")
+    api = client(tmp_path)
+
+    response = api.post(
+        "/analysis/run",
+        json={
+            "resume_text": "Python SQL",
+            "job_description": "Data Engineer with Python and SQL",
+            "provider": "Gemini",
+            "api_key": "must-not-enter-redis",
+        },
+    )
+
+    assert response.status_code == 400
+    assert api.get("/analysis").json()["analyses"] == []

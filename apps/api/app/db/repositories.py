@@ -1,10 +1,11 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from collections import Counter
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from apps.api.app.db.models import AgentEvent, AnalysisRun, Evidence, Job, Resume, User
+from apps.api.app.config import retention_days
 
 
 def get_or_create_user(session: Session, auth_subject: str, email: str = "") -> User:
@@ -31,14 +32,18 @@ def create_resume(
     session: Session,
     user_id: str,
     file_name: str,
-    parsed_text: str,
     redacted_text: str,
+    encrypted_original: str | None = None,
+    encryption_nonce: str | None = None,
 ) -> Resume:
     resume = Resume(
         user_id=user_id,
         file_name=file_name,
-        parsed_text=parsed_text,
+        parsed_text=None,
         redacted_text=redacted_text,
+        encrypted_original=encrypted_original,
+        encryption_nonce=encryption_nonce,
+        original_retained=bool(encrypted_original),
     )
     session.add(resume)
     session.flush()
@@ -78,6 +83,7 @@ def create_analysis_run(
         status="pending",
         provider=provider,
         model=model,
+        expires_at=datetime.now(timezone.utc) + timedelta(days=retention_days("pending")),
     )
     session.add(run)
     session.flush()
@@ -89,6 +95,7 @@ def complete_analysis_run(session: Session, run: AnalysisRun, analysis: dict) ->
     run.overall_score = int(analysis.get("scores", {}).get("overall_match_score") or 0)
     run.result_json = analysis
     run.completed_at = datetime.now(timezone.utc)
+    run.expires_at = run.completed_at + timedelta(days=retention_days("completed"))
     session.flush()
     return run
 
@@ -109,6 +116,7 @@ def fail_analysis_run(
     run.status = "failed"
     run.result_json = {"error": {"type": error_type, "message": error_message}}
     run.completed_at = datetime.now(timezone.utc)
+    run.expires_at = run.completed_at + timedelta(days=retention_days("failed"))
     add_agent_event(
         session=session,
         analysis_run_id=run.id,
@@ -123,6 +131,86 @@ def fail_analysis_run(
 
 def get_analysis_run_internal(session: Session, run_id: str) -> AnalysisRun | None:
     return session.scalar(select(AnalysisRun).where(AnalysisRun.id == run_id))
+
+
+def account_data_summary(session: Session, user_id: str) -> dict:
+    def count(model) -> int:
+        return int(
+            session.scalar(select(func.count()).select_from(model).where(model.user_id == user_id))
+            or 0
+        )
+
+    retained_originals = int(
+        session.scalar(
+            select(func.count()).select_from(Resume).where(
+                Resume.user_id == user_id,
+                Resume.original_retained.is_(True),
+            )
+        )
+        or 0
+    )
+    oldest = session.scalar(
+        select(func.min(AnalysisRun.created_at)).where(AnalysisRun.user_id == user_id)
+    )
+    return {
+        "analyses": count(AnalysisRun),
+        "resumes": count(Resume),
+        "jobs": count(Job),
+        "retained_originals": retained_originals,
+        "oldest_record": oldest.isoformat() if oldest else None,
+    }
+
+
+def delete_analysis_run(session: Session, run: AnalysisRun) -> dict[str, int]:
+    resume_id = run.resume_id
+    job_id = run.job_id
+    session.execute(delete(Evidence).where(Evidence.analysis_run_id == run.id))
+    session.execute(delete(AgentEvent).where(AgentEvent.analysis_run_id == run.id))
+    session.delete(run)
+    session.flush()
+
+    deleted_resumes = 0
+    deleted_jobs = 0
+    resume_references = session.scalar(
+        select(func.count()).select_from(AnalysisRun).where(AnalysisRun.resume_id == resume_id)
+    )
+    if not resume_references:
+        deleted_resumes = int(
+            session.execute(delete(Resume).where(Resume.id == resume_id)).rowcount or 0
+        )
+    job_references = session.scalar(
+        select(func.count()).select_from(AnalysisRun).where(AnalysisRun.job_id == job_id)
+    )
+    if not job_references:
+        deleted_jobs = int(session.execute(delete(Job).where(Job.id == job_id)).rowcount or 0)
+    session.flush()
+    return {"analyses": 1, "resumes": deleted_resumes, "jobs": deleted_jobs}
+
+
+def delete_user_data(session: Session, user: User) -> dict[str, int]:
+    totals = {"analyses": 0, "resumes": 0, "jobs": 0}
+    runs = list(session.scalars(select(AnalysisRun).where(AnalysisRun.user_id == user.id)))
+    for run in runs:
+        deleted = delete_analysis_run(session, run)
+        for key in totals:
+            totals[key] += deleted[key]
+
+    totals["resumes"] += int(
+        session.execute(delete(Resume).where(Resume.user_id == user.id)).rowcount or 0
+    )
+    totals["jobs"] += int(
+        session.execute(delete(Job).where(Job.user_id == user.id)).rowcount or 0
+    )
+    session.delete(user)
+    session.flush()
+    return totals
+
+
+def expired_analysis_runs(session: Session, now: datetime | None = None) -> list[AnalysisRun]:
+    cutoff = now or datetime.now(timezone.utc)
+    return list(
+        session.scalars(select(AnalysisRun).where(AnalysisRun.expires_at <= cutoff))
+    )
 
 
 def add_evidence_records(session: Session, analysis_run_id: str, analysis: dict) -> list[Evidence]:

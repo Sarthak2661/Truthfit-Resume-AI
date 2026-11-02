@@ -5,6 +5,7 @@ import { FitReviewNav } from "../../../components/FitReviewNav";
 import { ScoreCard } from "../../../components/ScoreCard";
 import { TrackerAction } from "../../../components/TrackerAction";
 import { AnalysisRunStatus } from "../../../components/AnalysisRunStatus";
+import { DeleteAnalysisAction } from "../../../components/DeleteAnalysisAction";
 import { getAnalysis } from "../../../lib/api";
 
 type PageProps = {
@@ -315,7 +316,10 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
             <h1>{summary.headline || "Resume analysis"}</h1>
             <p className="muted">{summary.short_explanation || "A practical resume-to-role review with evidence, risks, and next steps."}</p>
           </div>
-          <Link className="button" href={`/tailor/${run.run_id}`}>Tailor resume</Link>
+          <div className="button-row">
+            <DeleteAnalysisAction runId={run.run_id} />
+            <Link className="button" href={`/tailor/${run.run_id}`}>Tailor resume</Link>
+          </div>
         </div>
 
         <FitReviewNav />

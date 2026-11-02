@@ -9,7 +9,7 @@ def test_analysis_queries_are_scoped_to_authenticated_owner(tmp_path):
     with session_scope() as session:
         owner = repositories.get_or_create_user(session, "owner-sub", "owner@example.com")
         other_user = repositories.get_or_create_user(session, "other-sub", "other@example.com")
-        resume = repositories.create_resume(session, owner.id, "resume.txt", "Python", "Python")
+        resume = repositories.create_resume(session, owner.id, "resume.txt", "Python")
         job = repositories.create_job(session, owner.id, "Data Engineer", "Northstar", "Python")
         run = repositories.create_analysis_run(
             session,

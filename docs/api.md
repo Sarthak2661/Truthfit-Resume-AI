@@ -1,6 +1,6 @@
 # FastAPI Backend
 
-The API backend lives in `apps/api` and can run independently from Streamlit. Phase 0 production safeguards, Phase 1 authentication/ownership, and the Phase 2 durable analysis lifecycle are implemented.
+The API backend lives in `apps/api` and can run independently from Streamlit. Phase 0 production safeguards, Phase 1 authentication/ownership, the Phase 2 durable analysis lifecycle, and Phase 3 privacy controls are implemented.
 
 ## Run Locally
 
@@ -23,6 +23,9 @@ OpenAPI and Swagger UI are available at:
 | `POST` | `/analysis/run` | Create a pending analysis and return `202 Accepted` with a run ID and status URL. |
 | `GET` | `/analysis` | List recent saved analyses for dashboard/history views. |
 | `GET` | `/analysis/{run_id}` | Retrieve a saved analysis, status, provider/model, and overall score from the database. |
+| `DELETE` | `/analysis/{run_id}` | Delete one owned analysis and orphaned resume/job records. |
+| `GET` | `/account/data` | Inspect owned record counts, retained-original count, and retention period. |
+| `DELETE` | `/account/data` | Delete all TruthFit application data for the authenticated account. |
 | `POST` | `/tailor` | Return resume tailoring sections from an existing analysis or a fresh run. |
 | `GET` | `/providers` | List supported LLM providers, models, and defaults. |
 | `GET` | `/dashboard/summary` | Return recent analyses, average score, common gaps, provider usage, and failed-run counts. |
@@ -68,6 +71,11 @@ NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_publishable_key
 TRUTHFIT_ANALYSIS_QUEUE=rq
 REDIS_URL=rediss://your-private-redis-host:6379/0
+TRUTHFIT_RETENTION_DAYS=30
+TRUTHFIT_PENDING_RETENTION_DAYS=1
+TRUTHFIT_FAILED_RETENTION_DAYS=7
+TRUTHFIT_CLEANUP_ENABLED=true
+TRUTHFIT_RETENTION_ENCRYPTION_KEY=base64-encoded-32-byte-key
 ```
 
 `TRUTHFIT_ALLOWED_ORIGINS` accepts a comma-separated list of complete HTTP(S) origins. Wildcards, paths, query strings, and malformed origins are rejected. All resume, job, analysis, tailoring, dashboard, and tracker routes require a Supabase access token. `/health` and `/providers` remain public.
@@ -83,9 +91,11 @@ REDIS_URL=rediss://your-private-redis-host:6379/0
 
 ## Current Limitations
 
-- The API persists users, resumes, jobs, analysis runs, evidence rows, and agent events through SQLAlchemy.
-- Rate limits, hosted key controls, retention, and account deletion are planned for later phases.
-- Live analysis still depends on the selected provider API key and provider availability.
+- Redaction is heuristic and can miss unusual names, addresses, or resume layouts.
+- Job descriptions and structured analysis results are stored until deletion or expiry.
+- Deleting application data does not remove the corresponding Supabase Auth identity.
+- A deployment scheduler must invoke the cleanup command; the API process does not run its own scheduler.
+- Rate limits, managed quotas, and provider-cost controls remain future work.
 
 ## Analysis Lifecycle
 
@@ -101,7 +111,7 @@ Development defaults to `TRUTHFIT_ANALYSIS_QUEUE=background` and requires no Red
 rq worker --url "$REDIS_URL" truthfit-analysis
 ```
 
-RQ payloads can include a temporary bring-your-own provider key. Use private TLS Redis, short queue/result retention, and access controls. A later hosted-key gateway should remove client keys from queued payloads entirely.
+Production RQ analysis uses server-managed provider credentials. The API rejects browser-provided keys in RQ mode and strips key fields before enqueueing. Local background mode can use a temporary browser key, which remains in process memory for the duration of that request.
 
 ## Database
 
@@ -118,6 +128,26 @@ Run migrations:
 ```bash
 alembic upgrade head
 ```
+
+### Phase 3 local upgrade
+
+Back up an existing database before applying revision `0003_privacy_and_retention`. The migration intentionally clears legacy `resumes.parsed_text` values because that column may contain unencrypted originals; existing `redacted_text` and analysis results remain available.
+
+Add the retention settings from `.env.example`, then run:
+
+```powershell
+cd "C:\path\to\Truthfit-Resume-AI"
+.\.codex-run-venv\Scripts\python.exe -m alembic upgrade head
+.\.codex-run-venv\Scripts\python.exe -m uvicorn apps.api.app.main:app --reload --port 8000
+```
+
+Only generate `TRUTHFIT_RETENTION_ENCRYPTION_KEY` if encrypted-original retention will be offered:
+
+```powershell
+.\.codex-run-venv\Scripts\python.exe -c "import base64,secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())"
+```
+
+Store that value in the API environment, never in Git. Restart FastAPI and Next.js after changing environment variables.
 
 Seed demo data:
 
@@ -139,9 +169,12 @@ Run migrations on a fresh database before starting the API. API startup also cre
 
 ### Storage and access boundaries
 
-- Successful analysis runs persist the original and redacted resume text, filename, JD text, authenticated owner, result JSON, evidence rows, and completion event. Parse-only endpoints do not persist uploads.
+- Successful analysis runs persist redacted resume text, filename, JD text, authenticated owner, result JSON, evidence rows, and lifecycle events. Parse-only endpoints do not persist uploads.
+- Original resume text remains transient by default. When `retain_original_resume=true`, it is encrypted with AES-GCM using `TRUTHFIT_RETENTION_ENCRYPTION_KEY`; plaintext is never written to the resume table.
 - Saved runs survive API restarts when the same database is retained. The Next.js dashboard uses `/analysis` and `/dashboard/summary` to show recent runs without rerunning the model.
 - The verified JWT `sub` claim maps to `users.auth_subject`. Client payloads cannot choose an email or owner. Run lookup, history, dashboard aggregation, and tracker updates all include `user_id`; cross-user IDs return `404`.
 - Failed provider calls persist a failed run and an independent failure event. They are excluded from completed-score averages.
+- Users can inspect record counts, delete one owned run, or delete all TruthFit application data. Cross-account deletion returns `404`.
+- `expires_at` is set per lifecycle state. Run `python scripts/cleanup_expired_data.py` from a daily scheduler to remove expired runs and orphaned resume/job records.
 - The Streamlit app still uses session analysis state and its separate local JSON tracker. It does not use the API database.
 - Automated API tests use SQLite and mocked provider responses. They do not verify a live PostgreSQL deployment or live provider calls.

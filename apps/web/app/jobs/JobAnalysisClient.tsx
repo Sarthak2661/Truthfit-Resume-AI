@@ -17,6 +17,7 @@ type JobParseResult = {
 
 type ResumeParseResult = {
   filename: string;
+  text: string;
   redacted_text: string;
   redacted_char_count: number;
   sections: Record<string, string>;
@@ -47,6 +48,7 @@ export function JobAnalysisClient({ providers }: { providers: ProviderInfo[] }) 
   const [provider, setProvider] = useState(providers[0]?.name ?? "Gemini");
   const [model, setModel] = useState(providers[0]?.default_model ?? "");
   const [apiKey, setApiKey] = useState("");
+  const [retainOriginal, setRetainOriginal] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [parsingResume, setParsingResume] = useState(false);
@@ -58,7 +60,6 @@ export function JobAnalysisClient({ providers }: { providers: ProviderInfo[] }) 
     clearLegacyReviewStorage();
     setProvider(sessionStorage.getItem("truthfit.provider") ?? providers[0]?.name ?? "Gemini");
     setModel(sessionStorage.getItem("truthfit.model") ?? providers[0]?.default_model ?? "");
-    setApiKey(sessionStorage.getItem("truthfit.apiKey") ?? "");
   }, []);
 
   useEffect(() => {
@@ -78,10 +79,6 @@ export function JobAnalysisClient({ providers }: { providers: ProviderInfo[] }) 
   useEffect(() => {
     sessionStorage.setItem("truthfit.model", model);
   }, [model]);
-
-  useEffect(() => {
-    sessionStorage.setItem("truthfit.apiKey", apiKey);
-  }, [apiKey]);
 
   async function parseResume() {
     if (!resumeFormRef.current) {
@@ -110,7 +107,7 @@ export function JobAnalysisClient({ providers }: { providers: ProviderInfo[] }) 
 
       const parsed = (await response.json()) as ResumeParseResult;
       setResume(parsed);
-      setResumeText(parsed.redacted_text);
+      setResumeText(parsed.text);
       setResumeFileName(parsed.filename);
     } catch {
       setError("Resume parsing could not start in this browser. Refresh the page and try again.");
@@ -192,6 +189,7 @@ export function JobAnalysisClient({ providers }: { providers: ProviderInfo[] }) 
           provider,
           model,
           api_key: apiKey,
+          retain_original_resume: retainOriginal,
           resume_formatting_checks: resume?.ats_formatting_checks ?? [],
           target_region: targetRegion,
         }),
@@ -378,6 +376,18 @@ export function JobAnalysisClient({ providers }: { providers: ProviderInfo[] }) 
         <label className="field">
           <span>Provider API key</span>
           <input className="input" value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" />
+          <small className="muted">Kept in this page's memory only and cleared when the page closes.</small>
+        </label>
+        <label className="privacy-retention-option">
+          <input
+            checked={retainOriginal}
+            onChange={(event) => setRetainOriginal(event.target.checked)}
+            type="checkbox"
+          />
+          <span>
+            <strong>Retain encrypted original resume</strong>
+            <small className="muted">Off by default. The redacted version is stored either way.</small>
+          </span>
         </label>
         <Link className="settings-link" href="/settings/providers">
           Advanced model settings

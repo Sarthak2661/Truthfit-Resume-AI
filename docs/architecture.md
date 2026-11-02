@@ -21,7 +21,8 @@ flowchart LR
     prompt --> providers["Provider clients<br>Gemini / Claude / OpenAI / Perplexity"]
     providers --> schema["Structured result validation<br>Pydantic schemas"]
     schema --> services["Evidence, scoring, tracker,<br>report, observability services"]
-    api_services --> db["SQLAlchemy persistence<br>users / resumes / jobs / runs / evidence / events"]
+    api_services --> privacy["Privacy storage<br>redaction / AES-GCM / retention"]
+    privacy --> db["SQLAlchemy persistence<br>users / resumes / jobs / runs / evidence / events"]
     db --> api_services
     services --> worker
     services --> pages["Streamlit pages<br>Home / Analyze / Dashboard / Chat / Tracker"]
@@ -34,6 +35,7 @@ flowchart LR
 - `apps/api/` exposes the FastAPI backend with parse, queued analysis, tailoring, health, and provider endpoints.
 - `apps/api/app/db/` contains the Phase 2 SQLAlchemy models, database session management, and repositories.
 - `apps/api/app/analysis_queue.py` selects local background execution or Redis/RQ dispatch. Provider calls run outside database transactions, and each lifecycle transition is committed separately.
+- `apps/api/app/services/privacy_service.py` owns data inspection, per-run deletion, account-data deletion, and expiry cleanup. `source/services/privacy_storage.py` owns authenticated encryption for explicitly retained originals.
 - `source/pages/` contains user-facing page flows.
 - `source/loaders/` validates and extracts resume/JD text.
 - `source/ai/` builds prompts, calls LLM providers, validates structured output, and handles retry/fallback behavior.

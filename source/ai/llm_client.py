@@ -1,10 +1,12 @@
 import json
 import re
 
+from pydantic import ValidationError
+
 from source.ai.prompts import build_resume_analysis_prompt
 from source.ai.providers import LLMConfig, call_llm_with_retry
 from source.ai.errors import ProviderError, ProviderResponseError
-from source.ai.schemas import validate_analysis_result
+from source.ai.schemas import validate_llm_analysis_result
 from source.services.observability import log_warning, new_request_id, timed_operation
 
 
@@ -60,7 +62,7 @@ def generate_resume_analysis(
                 prompt,
                 LLMConfig(provider=provider, model=model, api_key=api_key),
             )
-        return validate_analysis_result(extract_json(output_text))
+        return validate_llm_analysis_result(extract_json(output_text))
 
     except json.JSONDecodeError as exc:
         log_warning(
@@ -72,6 +74,20 @@ def generate_resume_analysis(
         )
         raise ProviderResponseError(
             f"{provider} returned invalid JSON.",
+            provider=provider,
+            model=model,
+        ) from exc
+
+    except ValidationError as exc:
+        log_warning(
+            "analysis_schema_validation_failed",
+            request_id=request_id,
+            provider=provider,
+            model=model,
+            error_type=exc.__class__.__name__,
+        )
+        raise ProviderResponseError(
+            f"{provider} returned JSON that did not match the analysis schema.",
             provider=provider,
             model=model,
         ) from exc

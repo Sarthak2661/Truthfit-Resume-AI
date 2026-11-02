@@ -16,7 +16,7 @@ The repository currently contains two interfaces:
 
 ## Current Product Status
 
-The first four security and reliability phases of the Next.js/FastAPI product path are complete:
+The first five security and reliability phases of the Next.js/FastAPI product path are complete:
 
 | Phase | Status | Delivered |
 | --- | --- | --- |
@@ -24,6 +24,7 @@ The first four security and reliability phases of the Next.js/FastAPI product pa
 | Reliability Phase 1: authentication and ownership | Complete | Supabase email authentication, JWT verification in FastAPI, protected product routes, authenticated user mapping, user-scoped repositories, cross-account `404` responses, and ownership isolation tests. |
 | Reliability Phase 2: analysis lifecycle | Complete | Durable pending, processing, completed, and failed states; `202 Accepted` analysis requests; client polling; typed provider errors; independently committed failure events; and Redis/RQ production dispatch. |
 | Privacy Phase 3: retention and deletion | Complete | Redacted-only default persistence, optional AES-GCM encrypted originals, per-analysis and account-data deletion, configurable expiry, cleanup tooling, and memory-only browser BYOK credentials. |
+| LLM Phase 4: boundary and schema hardening | Complete | Strict nested Pydantic contracts, generated JSON Schema, fail-closed provider validation, untrusted-document delimiters, and malformed-output and prompt-injection tests. |
 
 Supabase stores login identities in its managed `auth.users` table, visible under **Authentication > Users**. TruthFit stores its application user record and owned analyses in the database selected by `DATABASE_URL`. A local `DATABASE_URL` therefore keeps application tables in local PostgreSQL even though authentication is handled by Supabase.
 
@@ -77,6 +78,7 @@ For the detailed current architecture, target v2 architecture, migration plan, a
 
 - [Architecture](docs/architecture.md)
 - [FastAPI backend](docs/api.md)
+- [Generated analysis schema](docs/analysis-result.schema.json)
 - [Platform roadmap](docs/platform-roadmap.md)
 - [v1 Streamlit baseline](docs/v1-baseline.md)
 - [Architecture decision records](docs/adr/ADR-001-keep-streamlit-v1-as-baseline.md)

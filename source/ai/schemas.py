@@ -1,197 +1,370 @@
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-LIST_FIELDS = [
-    "jd_red_flags",
-    "ats_keyword_coverage",
-    "ats_score_breakdown",
-    "score_drivers",
-    "confidence_findings",
-    "fix_impact_matrix",
-    "eligibility_risks",
-    "evidence_based_matches",
-    "hallucination_guardrail",
-    "before_after_bullets",
-    "resume_timeline_check",
-    "resume_fix_suggestions",
-    "skill_gap_learning_plan",
-    "project_suggestions",
-    "certification_suggestions",
-]
+Attention = Literal["High", "Medium", "Low"]
+Priority = Literal["Important", "Would help", "Nice to have"]
+RequirementStatus = Literal["Supported", "Partial", "Missing"]
+EvidenceStatus = Literal["Supported", "Partial", "Missing", "Unsafe"]
+MatchStrength = Literal["Strong", "Partial", "Weak"]
 
 
-class ScoreModel(BaseModel):
-    model_config = ConfigDict(extra="allow")
+class StrictModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
-    overall_match_score: int = 0
-    technical_match_score: int = 0
-    ats_keyword_coverage_score: int = 0
-    resume_evidence_score: int = 0
-    eligibility_score: int = 0
-    experience_match_score: int = 0
-    match_label: str = "Weak Match"
 
-    @field_validator(
-        "overall_match_score",
-        "technical_match_score",
-        "ats_keyword_coverage_score",
-        "resume_evidence_score",
-        "eligibility_score",
-        "experience_match_score",
-        mode="before",
-    )
+class JobDetails(StrictModel):
+    job_title: str = ""
+    company_name: str = ""
+    salary_range: str = ""
+    location_or_work_policy: str = ""
+    employment_type: str = ""
+    job_link: str = ""
+    sponsorship_policy: str = ""
+    experience_required: str = ""
+    degree_required: str = ""
+    travel_requirement: str = ""
+    security_clearance: str = ""
+    contract_or_full_time: str = ""
+    target_region: str = ""
+
+
+class ScoreModel(StrictModel):
+    overall_match_score: int = Field(default=0, ge=0, le=100)
+    technical_match_score: int = Field(default=0, ge=0, le=100)
+    ats_keyword_coverage_score: int = Field(default=0, ge=0, le=100)
+    resume_evidence_score: int = Field(default=0, ge=0, le=100)
+    eligibility_score: int = Field(default=0, ge=0, le=100)
+    experience_match_score: int = Field(default=0, ge=0, le=100)
+    match_label: Literal["Strong Match", "Good Match", "Partial Match", "Weak Match"] = "Weak Match"
+
+
+class MatchSummary(StrictModel):
+    headline: str = "Analysis unavailable"
+    short_explanation: str = ""
+    apply_recommendation: Literal[
+        "Apply confidently",
+        "Apply after tailoring",
+        "Improve resume first",
+        "High risk",
+        "Skip",
+    ] = "Improve resume first"
+    top_strengths: list[str] = Field(default_factory=list)
+    top_concerns: list[str] = Field(default_factory=list)
+
+
+class JdRedFlag(StrictModel):
+    flag: str = ""
+    severity: Attention = "Medium"
+    jd_evidence: str = ""
+    why_it_matters: str = ""
+    candidate_impact: str = ""
+
+
+class RequirementCategory(StrictModel):
+    category: str = "Other"
+    requirements: list[str] = Field(default_factory=list)
+    candidate_status: MatchStrength = "Partial"
+
+
+class RequirementFinding(StrictModel):
+    requirement: str = ""
+    status: RequirementStatus = "Missing"
+    priority: Priority = "Important"
+    resume_evidence: str = "Not found in resume."
+    recommendation: str = ""
+
+
+class JobTitleRequirement(StrictModel):
+    requirement: str = ""
+    status: RequirementStatus = "Missing"
+    resume_evidence: str = "Not found in resume."
+    recommendation: str = ""
+
+
+class JdRequirements(StrictModel):
+    requirement_categories: list[RequirementCategory] = Field(default_factory=list)
+    must_have: list[RequirementFinding] = Field(default_factory=list)
+    nice_to_have: list[RequirementFinding] = Field(default_factory=list)
+    job_title_requirements: list[JobTitleRequirement] = Field(default_factory=list)
+
+
+class MatchedSkill(StrictModel):
+    skill: str = ""
+    category: str = ""
+    evidence_status: Literal["Supported", "Partial"] = "Partial"
+    resume_evidence: str = "Not found in resume."
+
+
+class MissingSkill(StrictModel):
+    skill: str = ""
+    category: str = ""
+    priority: Priority = "Important"
+    reason: str = ""
+
+
+class NiceToHaveSkill(StrictModel):
+    skill: str = ""
+    category: str = ""
+    status: RequirementStatus = "Missing"
+    resume_evidence: str = "Not found in resume."
+
+
+class SkillsAnalysis(StrictModel):
+    matched_skills: list[MatchedSkill] = Field(default_factory=list)
+    missing_skills: list[MissingSkill] = Field(default_factory=list)
+    nice_to_have_skills: list[NiceToHaveSkill] = Field(default_factory=list)
+
+
+class AtsKeywordCoverage(StrictModel):
+    keyword: str = ""
+    importance: Priority = "Important"
+    found_in_resume: bool = False
+    coverage_status: Literal["Covered", "Partial", "Missing"] = "Missing"
+    resume_evidence: str = "Not found in resume."
+
+
+class AtsScoreBreakdown(StrictModel):
+    category: str = ""
+    score: int = Field(default=0, ge=0, le=100)
+    status: MatchStrength = "Weak"
+    evidence: str = ""
+    recommendation: str = ""
+
+
+class ScoreDriver(StrictModel):
+    driver: str = ""
+    contribution: int = Field(default=0, ge=-100, le=100)
+    direction: Literal["Positive", "Negative"] = "Positive"
+    evidence: str = ""
+
+
+class ConfidenceFinding(StrictModel):
+    finding: str = ""
+    confidence: Attention = "Medium"
+    resume_evidence: str = "Not found in resume."
+    jd_evidence: str = "Not found in job description."
+    risk: Attention = "Medium"
+    recommendation: str = ""
+    verify_manually: str = ""
+
+
+class FixImpact(StrictModel):
+    fix: str = ""
+    impact: Attention = "Medium"
+    effort: Attention = "Medium"
+    priority: Priority = "Would help"
+    why_it_matters: str = ""
+    source: Literal["Resume Fix", "Skill Gap", "Risk", "Requirement"] = "Resume Fix"
+
+
+class EligibilityRisk(StrictModel):
+    risk_type: str = ""
+    severity: Attention = "Medium"
+    jd_evidence: str = "Not found in job description."
+    resume_evidence: str = "Not found in resume."
+    explanation: str = ""
+    recommendation: str = ""
+
+
+class EvidenceMatch(StrictModel):
+    jd_requirement: str = ""
+    resume_evidence: str = "Not found in resume."
+    match_strength: MatchStrength = "Weak"
+    explanation: str = ""
+
+
+class GuardrailFinding(StrictModel):
+    claim_or_skill: str = ""
+    status: EvidenceStatus = "Missing"
+    evidence: str = "Not found in resume."
+    action: str = "Remove"
+
+
+class BulletRewrite(StrictModel):
+    original: str = ""
+    rewritten: str = ""
+    evidence_status: Literal["Supported", "Partial", "Unsafe"] = "Unsafe"
+    why_improved: str = ""
+    risk_note: str = ""
+
+    @model_validator(mode="before")
     @classmethod
-    def clamp_score(cls, value):
-        try:
-            score = int(value or 0)
-        except (TypeError, ValueError):
-            return 0
+    def normalize_legacy_keys(cls, value):
+        if not isinstance(value, dict):
+            return value
+        normalized = dict(value)
+        if "before" in normalized and "original" not in normalized:
+            normalized["original"] = normalized.pop("before")
+        if "after" in normalized and "rewritten" not in normalized:
+            normalized["rewritten"] = normalized.pop("after")
+        return normalized
 
-        return max(0, min(100, score))
+
+class TimelineFinding(StrictModel):
+    issue: str = ""
+    severity: Attention = "Medium"
+    evidence: str = ""
+    recommendation: str = ""
 
 
-class AnalysisResultModel(BaseModel):
-    model_config = ConfigDict(extra="allow")
+class ResumeFix(StrictModel):
+    issue: str = ""
+    why_it_matters: str = ""
+    suggested_fix: str = ""
+    priority: Priority = "Would help"
 
-    job_details: dict = Field(default_factory=dict)
+
+class LearningPlanItem(StrictModel):
+    skill: str = ""
+    priority: Priority = "Would help"
+    why_needed: str = ""
+    learning_action: str = ""
+    mini_project_idea: str = ""
+
+
+class ProjectSuggestion(StrictModel):
+    project_title: str = ""
+    target_gap: str = ""
+    why_it_helps: str = ""
+    suggested_scope: str = ""
+    resume_bullet_example: str = ""
+    priority: Priority = "Would help"
+
+
+class CertificationSuggestion(StrictModel):
+    certification: str = ""
+    target_gap: str = ""
+    why_it_helps: str = ""
+    priority: Priority = "Nice to have"
+    estimated_effort: str = ""
+
+
+class TailoredBullet(StrictModel):
+    original_or_source: str = ""
+    rewritten: str = ""
+    evidence_status: Literal["Supported", "Partial", "Unsafe"] = "Unsafe"
+    why_improved: str = ""
+
+
+class TailoredResumeContent(StrictModel):
+    tailored_summary: str = ""
+    rewritten_bullets: list[TailoredBullet] = Field(default_factory=list)
+
+
+class LLMAnalysisResultModel(StrictModel):
+    job_details: JobDetails
+    scores: ScoreModel
+    match_summary: MatchSummary
+    jd_red_flags: list[JdRedFlag]
+    jd_requirements: JdRequirements
+    skills_analysis: SkillsAnalysis
+    ats_keyword_coverage: list[AtsKeywordCoverage]
+    ats_score_breakdown: list[AtsScoreBreakdown]
+    score_drivers: list[ScoreDriver]
+    confidence_findings: list[ConfidenceFinding]
+    fix_impact_matrix: list[FixImpact]
+    eligibility_risks: list[EligibilityRisk]
+    evidence_based_matches: list[EvidenceMatch]
+    hallucination_guardrail: list[GuardrailFinding]
+    before_after_bullets: list[BulletRewrite]
+    resume_timeline_check: list[TimelineFinding]
+    resume_fix_suggestions: list[ResumeFix]
+    skill_gap_learning_plan: list[LearningPlanItem]
+    project_suggestions: list[ProjectSuggestion]
+    certification_suggestions: list[CertificationSuggestion]
+    tailored_resume_content: TailoredResumeContent
+    cover_letter: str
+
+
+class EvidenceGap(StrictModel):
+    claim: str = ""
+    status: str = ""
+    evidence: str = ""
+    recommendation: str = ""
+
+
+class EvidenceClaim(EvidenceGap):
+    bucket: str = ""
+    points: int = Field(default=0, ge=0, le=100)
+
+
+class ResumeEvidenceSummary(StrictModel):
+    score: int = Field(default=0, ge=0, le=100)
+    supported: int = Field(default=0, ge=0)
+    partial: int = Field(default=0, ge=0)
+    missing: int = Field(default=0, ge=0)
+    unsafe: int = Field(default=0, ge=0)
+    top_gaps: list[EvidenceGap] = Field(default_factory=list)
+    claim_checks: list[EvidenceClaim] = Field(default_factory=list)
+
+
+class AtsFormattingCheck(StrictModel):
+    check: str = ""
+    status: str = ""
+    severity: str = ""
+    detail: str = ""
+    recommendation: str = ""
+
+
+class TrackerState(StrictModel):
+    status: str = "Not saved"
+    notes: str = ""
+    priority: str = "Normal"
+    applied_at: str = ""
+    follow_up_date: str = ""
+    updated_at: str = ""
+    saved: bool = False
+
+
+class AnalysisResultModel(LLMAnalysisResultModel):
+    job_details: JobDetails = Field(default_factory=JobDetails)
     scores: ScoreModel = Field(default_factory=ScoreModel)
-    match_summary: dict = Field(default_factory=dict)
-    jd_red_flags: list = Field(default_factory=list)
-    jd_requirements: dict = Field(default_factory=dict)
-    skills_analysis: dict = Field(default_factory=dict)
-    ats_keyword_coverage: list = Field(default_factory=list)
-    ats_score_breakdown: list = Field(default_factory=list)
-    score_drivers: list = Field(default_factory=list)
-    confidence_findings: list = Field(default_factory=list)
-    fix_impact_matrix: list = Field(default_factory=list)
-    eligibility_risks: list = Field(default_factory=list)
-    evidence_based_matches: list = Field(default_factory=list)
-    hallucination_guardrail: list = Field(default_factory=list)
-    before_after_bullets: list = Field(default_factory=list)
-    resume_timeline_check: list = Field(default_factory=list)
-    resume_fix_suggestions: list = Field(default_factory=list)
-    skill_gap_learning_plan: list = Field(default_factory=list)
-    project_suggestions: list = Field(default_factory=list)
-    certification_suggestions: list = Field(default_factory=list)
-    tailored_resume_content: dict = Field(default_factory=dict)
+    match_summary: MatchSummary = Field(default_factory=MatchSummary)
+    jd_red_flags: list[JdRedFlag] = Field(default_factory=list)
+    jd_requirements: JdRequirements = Field(default_factory=JdRequirements)
+    skills_analysis: SkillsAnalysis = Field(default_factory=SkillsAnalysis)
+    ats_keyword_coverage: list[AtsKeywordCoverage] = Field(default_factory=list)
+    ats_score_breakdown: list[AtsScoreBreakdown] = Field(default_factory=list)
+    score_drivers: list[ScoreDriver] = Field(default_factory=list)
+    confidence_findings: list[ConfidenceFinding] = Field(default_factory=list)
+    fix_impact_matrix: list[FixImpact] = Field(default_factory=list)
+    eligibility_risks: list[EligibilityRisk] = Field(default_factory=list)
+    evidence_based_matches: list[EvidenceMatch] = Field(default_factory=list)
+    hallucination_guardrail: list[GuardrailFinding] = Field(default_factory=list)
+    before_after_bullets: list[BulletRewrite] = Field(default_factory=list)
+    resume_timeline_check: list[TimelineFinding] = Field(default_factory=list)
+    resume_fix_suggestions: list[ResumeFix] = Field(default_factory=list)
+    skill_gap_learning_plan: list[LearningPlanItem] = Field(default_factory=list)
+    project_suggestions: list[ProjectSuggestion] = Field(default_factory=list)
+    certification_suggestions: list[CertificationSuggestion] = Field(default_factory=list)
+    tailored_resume_content: TailoredResumeContent = Field(default_factory=TailoredResumeContent)
     cover_letter: str = ""
+    resume_heatmap_text: str = ""
+    resume_evidence_summary: ResumeEvidenceSummary | None = None
+    ats_formatting_checks: list[AtsFormattingCheck] = Field(default_factory=list)
+    tracker: TrackerState | None = None
 
-    @field_validator(*LIST_FIELDS, mode="before")
-    @classmethod
-    def ensure_list(cls, value):
-        return value if isinstance(value, list) else []
 
-    @field_validator(
-        "job_details",
-        "match_summary",
-        "jd_requirements",
-        "skills_analysis",
-        "tailored_resume_content",
-        mode="before",
-    )
-    @classmethod
-    def ensure_dict(cls, value):
-        return value if isinstance(value, dict) else {}
+def analysis_json_schema() -> dict:
+    """Return the provider-facing contract from the models used for validation."""
+    return LLMAnalysisResultModel.model_json_schema()
 
 
 def default_analysis_result(error_message: str = "") -> dict:
-    return {
-        "job_details": {
-            "job_title": "",
-            "company_name": "",
-            "salary_range": "",
-            "location_or_work_policy": "",
-            "employment_type": "",
-            "job_link": "",
-            "sponsorship_policy": "",
-            "experience_required": "",
-            "degree_required": "",
-            "travel_requirement": "",
-            "security_clearance": "",
-            "contract_or_full_time": ""
-        },
-        "scores": {
-            "overall_match_score": 0,
-            "technical_match_score": 0,
-            "ats_keyword_coverage_score": 0,
-            "resume_evidence_score": 0,
-            "eligibility_score": 0,
-            "experience_match_score": 0,
-            "match_label": "Weak Match"
-        },
-        "match_summary": {
-            "headline": "Analysis unavailable",
-            "short_explanation": error_message,
-            "apply_recommendation": "Improve resume first",
-            "top_strengths": [],
-            "top_concerns": [error_message] if error_message else []
-        },
-        "jd_red_flags": [],
-        "jd_requirements": {
-            "requirement_categories": [],
-            "must_have": [],
-            "nice_to_have": [],
-            "job_title_requirements": []
-        },
-        "skills_analysis": {
-            "matched_skills": [],
-            "missing_skills": [],
-            "nice_to_have_skills": []
-        },
-        "ats_keyword_coverage": [],
-        "ats_score_breakdown": [],
-        "score_drivers": [],
-        "confidence_findings": [],
-        "fix_impact_matrix": [],
-        "eligibility_risks": [],
-        "evidence_based_matches": [],
-        "hallucination_guardrail": [],
-        "before_after_bullets": [],
-        "resume_timeline_check": [],
-        "resume_fix_suggestions": [],
-        "skill_gap_learning_plan": [],
-        "project_suggestions": [],
-        "certification_suggestions": [],
-        "tailored_resume_content": {
-            "tailored_summary": "",
-            "rewritten_bullets": []
-        },
-        "cover_letter": ""
-    }
+    result = AnalysisResultModel().model_dump()
+    result["match_summary"]["short_explanation"] = error_message
+    result["match_summary"]["top_concerns"] = [error_message] if error_message else []
+    return result
+
+
+def validate_llm_analysis_result(value) -> dict:
+    return LLMAnalysisResultModel.model_validate(value).model_dump()
 
 
 def validate_analysis_result(value) -> dict:
-    base = default_analysis_result()
-
     if not isinstance(value, dict):
         return default_analysis_result("Analysis output was not a JSON object.")
-
-    merged = {**base, **value}
-    merged["scores"] = {**base["scores"], **value.get("scores", {})} if isinstance(value.get("scores"), dict) else base["scores"]
-    merged["job_details"] = (
-        {**base["job_details"], **value.get("job_details", {})}
-        if isinstance(value.get("job_details"), dict)
-        else base["job_details"]
-    )
-    merged["match_summary"] = (
-        {**base["match_summary"], **value.get("match_summary", {})}
-        if isinstance(value.get("match_summary"), dict)
-        else base["match_summary"]
-    )
-    merged["jd_requirements"] = (
-        {**base["jd_requirements"], **value.get("jd_requirements", {})}
-        if isinstance(value.get("jd_requirements"), dict)
-        else base["jd_requirements"]
-    )
-    merged["skills_analysis"] = (
-        {**base["skills_analysis"], **value.get("skills_analysis", {})}
-        if isinstance(value.get("skills_analysis"), dict)
-        else base["skills_analysis"]
-    )
-    merged["tailored_resume_content"] = (
-        {**base["tailored_resume_content"], **value.get("tailored_resume_content", {})}
-        if isinstance(value.get("tailored_resume_content"), dict)
-        else base["tailored_resume_content"]
-    )
-
+    merged = {**default_analysis_result(), **value}
     return AnalysisResultModel.model_validate(merged).model_dump()

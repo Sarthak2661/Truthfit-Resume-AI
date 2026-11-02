@@ -1,0 +1,1232 @@
+{
+  "$defs": {
+    "AtsKeywordCoverage": {
+      "additionalProperties": false,
+      "properties": {
+        "coverage_status": {
+          "default": "Missing",
+          "enum": [
+            "Covered",
+            "Partial",
+            "Missing"
+          ],
+          "title": "Coverage Status",
+          "type": "string"
+        },
+        "found_in_resume": {
+          "default": false,
+          "title": "Found In Resume",
+          "type": "boolean"
+        },
+        "importance": {
+          "default": "Important",
+          "enum": [
+            "Important",
+            "Would help",
+            "Nice to have"
+          ],
+          "title": "Importance",
+          "type": "string"
+        },
+        "keyword": {
+          "default": "",
+          "title": "Keyword",
+          "type": "string"
+        },
+        "resume_evidence": {
+          "default": "Not found in resume.",
+          "title": "Resume Evidence",
+          "type": "string"
+        }
+      },
+      "title": "AtsKeywordCoverage",
+      "type": "object"
+    },
+    "AtsScoreBreakdown": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "default": "",
+          "title": "Category",
+          "type": "string"
+        },
+        "evidence": {
+          "default": "",
+          "title": "Evidence",
+          "type": "string"
+        },
+        "recommendation": {
+          "default": "",
+          "title": "Recommendation",
+          "type": "string"
+        },
+        "score": {
+          "default": 0,
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Score",
+          "type": "integer"
+        },
+        "status": {
+          "default": "Weak",
+          "enum": [
+            "Strong",
+            "Partial",
+            "Weak"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "title": "AtsScoreBreakdown",
+      "type": "object"
+    },
+    "BulletRewrite": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_status": {
+          "default": "Unsafe",
+          "enum": [
+            "Supported",
+            "Partial",
+            "Unsafe"
+          ],
+          "title": "Evidence Status",
+          "type": "string"
+        },
+        "original": {
+          "default": "",
+          "title": "Original",
+          "type": "string"
+        },
+        "rewritten": {
+          "default": "",
+          "title": "Rewritten",
+          "type": "string"
+        },
+        "risk_note": {
+          "default": "",
+          "title": "Risk Note",
+          "type": "string"
+        },
+        "why_improved": {
+          "default": "",
+          "title": "Why Improved",
+          "type": "string"
+        }
+      },
+      "title": "BulletRewrite",
+      "type": "object"
+    },
+    "CertificationSuggestion": {
+      "additionalProperties": false,
+      "properties": {
+        "certification": {
+          "default": "",
+          "title": "Certification",
+          "type": "string"
+        },
+        "estimated_effort": {
+          "default": "",
+          "title": "Estimated Effort",
+          "type": "string"
+        },
+        "priority": {
+          "default": "Nice to have",
+          "enum": [
+            "Important",
+            "Would help",
+            "Nice to have"
+          ],
+          "title": "Priority",
+          "type": "string"
+        },
+        "target_gap": {
+          "default": "",
+          "title": "Target Gap",
+          "type": "string"
+        },
+        "why_it_helps": {
+          "default": "",
+          "title": "Why It Helps",
+          "type": "string"
+        }
+      },
+      "title": "CertificationSuggestion",
+      "type": "object"
+    },
+    "ConfidenceFinding": {
+      "additionalProperties": false,
+      "properties": {
+        "confidence": {
+          "default": "Medium",
+          "enum": [
+            "High",
+            "Medium",
+            "Low"
+          ],
+          "title": "Confidence",
+          "type": "string"
+        },
+        "finding": {
+          "default": "",
+          "title": "Finding",
+          "type": "string"
+        },
+        "jd_evidence": {
+          "default": "Not found in job description.",
+          "title": "Jd Evidence",
+          "type": "string"
+        },
+        "recommendation": {
+          "default": "",
+          "title": "Recommendation",
+          "type": "string"
+        },
+        "resume_evidence": {
+          "default": "Not found in resume.",
+          "title": "Resume Evidence",
+          "type": "string"
+        },
+        "risk": {
+          "default": "Medium",
+          "enum": [
+            "High",
+            "Medium",
+            "Low"
+          ],
+          "title": "Risk",
+          "type": "string"
+        },
+        "verify_manually": {
+          "default": "",
+          "title": "Verify Manually",
+          "type": "string"
+        }
+      },
+      "title": "ConfidenceFinding",
+      "type": "object"
+    },
+    "EligibilityRisk": {
+      "additionalProperties": false,
+      "properties": {
+        "explanation": {
+          "default": "",
+          "title": "Explanation",
+          "type": "string"
+        },
+        "jd_evidence": {
+          "default": "Not found in job description.",
+          "title": "Jd Evidence",
+          "type": "string"
+        },
+        "recommendation": {
+          "default": "",
+          "title": "Recommendation",
+          "type": "string"
+        },
+        "resume_evidence": {
+          "default": "Not found in resume.",
+          "title": "Resume Evidence",
+          "type": "string"
+        },
+        "risk_type": {
+          "default": "",
+          "title": "Risk Type",
+          "type": "string"
+        },
+        "severity": {
+          "default": "Medium",
+          "enum": [
+            "High",
+            "Medium",
+            "Low"
+          ],
+          "title": "Severity",
+          "type": "string"
+        }
+      },
+      "title": "EligibilityRisk",
+      "type": "object"
+    },
+    "EvidenceMatch": {
+      "additionalProperties": false,
+      "properties": {
+        "explanation": {
+          "default": "",
+          "title": "Explanation",
+          "type": "string"
+        },
+        "jd_requirement": {
+          "default": "",
+          "title": "Jd Requirement",
+          "type": "string"
+        },
+        "match_strength": {
+          "default": "Weak",
+          "enum": [
+            "Strong",
+            "Partial",
+            "Weak"
+          ],
+          "title": "Match Strength",
+          "type": "string"
+        },
+        "resume_evidence": {
+          "default": "Not found in resume.",
+          "title": "Resume Evidence",
+          "type": "string"
+        }
+      },
+      "title": "EvidenceMatch",
+      "type": "object"
+    },
+    "FixImpact": {
+      "additionalProperties": false,
+      "properties": {
+        "effort": {
+          "default": "Medium",
+          "enum": [
+            "High",
+            "Medium",
+            "Low"
+          ],
+          "title": "Effort",
+          "type": "string"
+        },
+        "fix": {
+          "default": "",
+          "title": "Fix",
+          "type": "string"
+        },
+        "impact": {
+          "default": "Medium",
+          "enum": [
+            "High",
+            "Medium",
+            "Low"
+          ],
+          "title": "Impact",
+          "type": "string"
+        },
+        "priority": {
+          "default": "Would help",
+          "enum": [
+            "Important",
+            "Would help",
+            "Nice to have"
+          ],
+          "title": "Priority",
+          "type": "string"
+        },
+        "source": {
+          "default": "Resume Fix",
+          "enum": [
+            "Resume Fix",
+            "Skill Gap",
+            "Risk",
+            "Requirement"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "why_it_matters": {
+          "default": "",
+          "title": "Why It Matters",
+          "type": "string"
+        }
+      },
+      "title": "FixImpact",
+      "type": "object"
+    },
+    "GuardrailFinding": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "default": "Remove",
+          "title": "Action",
+          "type": "string"
+        },
+        "claim_or_skill": {
+          "default": "",
+          "title": "Claim Or Skill",
+          "type": "string"
+        },
+        "evidence": {
+          "default": "Not found in resume.",
+          "title": "Evidence",
+          "type": "string"
+        },
+        "status": {
+          "default": "Missing",
+          "enum": [
+            "Supported",
+            "Partial",
+            "Missing",
+            "Unsafe"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "title": "GuardrailFinding",
+      "type": "object"
+    },
+    "JdRedFlag": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_impact": {
+          "default": "",
+          "title": "Candidate Impact",
+          "type": "string"
+        },
+        "flag": {
+          "default": "",
+          "title": "Flag",
+          "type": "string"
+        },
+        "jd_evidence": {
+          "default": "",
+          "title": "Jd Evidence",
+          "type": "string"
+        },
+        "severity": {
+          "default": "Medium",
+          "enum": [
+            "High",
+            "Medium",
+            "Low"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "why_it_matters": {
+          "default": "",
+          "title": "Why It Matters",
+          "type": "string"
+        }
+      },
+      "title": "JdRedFlag",
+      "type": "object"
+    },
+    "JdRequirements": {
+      "additionalProperties": false,
+      "properties": {
+        "job_title_requirements": {
+          "items": {
+            "$ref": "#/$defs/JobTitleRequirement"
+          },
+          "title": "Job Title Requirements",
+          "type": "array"
+        },
+        "must_have": {
+          "items": {
+            "$ref": "#/$defs/RequirementFinding"
+          },
+          "title": "Must Have",
+          "type": "array"
+        },
+        "nice_to_have": {
+          "items": {
+            "$ref": "#/$defs/RequirementFinding"
+          },
+          "title": "Nice To Have",
+          "type": "array"
+        },
+        "requirement_categories": {
+          "items": {
+            "$ref": "#/$defs/RequirementCategory"
+          },
+          "title": "Requirement Categories",
+          "type": "array"
+        }
+      },
+      "title": "JdRequirements",
+      "type": "object"
+    },
+    "JobDetails": {
+      "additionalProperties": false,
+      "properties": {
+        "company_name": {
+          "default": "",
+          "title": "Company Name",
+          "type": "string"
+        },
+        "contract_or_full_time": {
+          "default": "",
+          "title": "Contract Or Full Time",
+          "type": "string"
+        },
+        "degree_required": {
+          "default": "",
+          "title": "Degree Required",
+          "type": "string"
+        },
+        "employment_type": {
+          "default": "",
+          "title": "Employment Type",
+          "type": "string"
+        },
+        "experience_required": {
+          "default": "",
+          "title": "Experience Required",
+          "type": "string"
+        },
+        "job_link": {
+          "default": "",
+          "title": "Job Link",
+          "type": "string"
+        },
+        "job_title": {
+          "default": "",
+          "title": "Job Title",
+          "type": "string"
+        },
+        "location_or_work_policy": {
+          "default": "",
+          "title": "Location Or Work Policy",
+          "type": "string"
+        },
+        "salary_range": {
+          "default": "",
+          "title": "Salary Range",
+          "type": "string"
+        },
+        "security_clearance": {
+          "default": "",
+          "title": "Security Clearance",
+          "type": "string"
+        },
+        "sponsorship_policy": {
+          "default": "",
+          "title": "Sponsorship Policy",
+          "type": "string"
+        },
+        "target_region": {
+          "default": "",
+          "title": "Target Region",
+          "type": "string"
+        },
+        "travel_requirement": {
+          "default": "",
+          "title": "Travel Requirement",
+          "type": "string"
+        }
+      },
+      "title": "JobDetails",
+      "type": "object"
+    },
+    "JobTitleRequirement": {
+      "additionalProperties": false,
+      "properties": {
+        "recommendation": {
+          "default": "",
+          "title": "Recommendation",
+          "type": "string"
+        },
+        "requirement": {
+          "default": "",
+          "title": "Requirement",
+          "type": "string"
+        },
+        "resume_evidence": {
+          "default": "Not found in resume.",
+          "title": "Resume Evidence",
+          "type": "string"
+        },
+        "status": {
+          "default": "Missing",
+          "enum": [
+            "Supported",
+            "Partial",
+            "Missing"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "title": "JobTitleRequirement",
+      "type": "object"
+    },
+    "LearningPlanItem": {
+      "additionalProperties": false,
+      "properties": {
+        "learning_action": {
+          "default": "",
+          "title": "Learning Action",
+          "type": "string"
+        },
+        "mini_project_idea": {
+          "default": "",
+          "title": "Mini Project Idea",
+          "type": "string"
+        },
+        "priority": {
+          "default": "Would help",
+          "enum": [
+            "Important",
+            "Would help",
+            "Nice to have"
+          ],
+          "title": "Priority",
+          "type": "string"
+        },
+        "skill": {
+          "default": "",
+          "title": "Skill",
+          "type": "string"
+        },
+        "why_needed": {
+          "default": "",
+          "title": "Why Needed",
+          "type": "string"
+        }
+      },
+      "title": "LearningPlanItem",
+      "type": "object"
+    },
+    "MatchSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "apply_recommendation": {
+          "default": "Improve resume first",
+          "enum": [
+            "Apply confidently",
+            "Apply after tailoring",
+            "Improve resume first",
+            "High risk",
+            "Skip"
+          ],
+          "title": "Apply Recommendation",
+          "type": "string"
+        },
+        "headline": {
+          "default": "Analysis unavailable",
+          "title": "Headline",
+          "type": "string"
+        },
+        "short_explanation": {
+          "default": "",
+          "title": "Short Explanation",
+          "type": "string"
+        },
+        "top_concerns": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Top Concerns",
+          "type": "array"
+        },
+        "top_strengths": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Top Strengths",
+          "type": "array"
+        }
+      },
+      "title": "MatchSummary",
+      "type": "object"
+    },
+    "MatchedSkill": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "default": "",
+          "title": "Category",
+          "type": "string"
+        },
+        "evidence_status": {
+          "default": "Partial",
+          "enum": [
+            "Supported",
+            "Partial"
+          ],
+          "title": "Evidence Status",
+          "type": "string"
+        },
+        "resume_evidence": {
+          "default": "Not found in resume.",
+          "title": "Resume Evidence",
+          "type": "string"
+        },
+        "skill": {
+          "default": "",
+          "title": "Skill",
+          "type": "string"
+        }
+      },
+      "title": "MatchedSkill",
+      "type": "object"
+    },
+    "MissingSkill": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "default": "",
+          "title": "Category",
+          "type": "string"
+        },
+        "priority": {
+          "default": "Important",
+          "enum": [
+            "Important",
+            "Would help",
+            "Nice to have"
+          ],
+          "title": "Priority",
+          "type": "string"
+        },
+        "reason": {
+          "default": "",
+          "title": "Reason",
+          "type": "string"
+        },
+        "skill": {
+          "default": "",
+          "title": "Skill",
+          "type": "string"
+        }
+      },
+      "title": "MissingSkill",
+      "type": "object"
+    },
+    "NiceToHaveSkill": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "default": "",
+          "title": "Category",
+          "type": "string"
+        },
+        "resume_evidence": {
+          "default": "Not found in resume.",
+          "title": "Resume Evidence",
+          "type": "string"
+        },
+        "skill": {
+          "default": "",
+          "title": "Skill",
+          "type": "string"
+        },
+        "status": {
+          "default": "Missing",
+          "enum": [
+            "Supported",
+            "Partial",
+            "Missing"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "title": "NiceToHaveSkill",
+      "type": "object"
+    },
+    "ProjectSuggestion": {
+      "additionalProperties": false,
+      "properties": {
+        "priority": {
+          "default": "Would help",
+          "enum": [
+            "Important",
+            "Would help",
+            "Nice to have"
+          ],
+          "title": "Priority",
+          "type": "string"
+        },
+        "project_title": {
+          "default": "",
+          "title": "Project Title",
+          "type": "string"
+        },
+        "resume_bullet_example": {
+          "default": "",
+          "title": "Resume Bullet Example",
+          "type": "string"
+        },
+        "suggested_scope": {
+          "default": "",
+          "title": "Suggested Scope",
+          "type": "string"
+        },
+        "target_gap": {
+          "default": "",
+          "title": "Target Gap",
+          "type": "string"
+        },
+        "why_it_helps": {
+          "default": "",
+          "title": "Why It Helps",
+          "type": "string"
+        }
+      },
+      "title": "ProjectSuggestion",
+      "type": "object"
+    },
+    "RequirementCategory": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_status": {
+          "default": "Partial",
+          "enum": [
+            "Strong",
+            "Partial",
+            "Weak"
+          ],
+          "title": "Candidate Status",
+          "type": "string"
+        },
+        "category": {
+          "default": "Other",
+          "title": "Category",
+          "type": "string"
+        },
+        "requirements": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Requirements",
+          "type": "array"
+        }
+      },
+      "title": "RequirementCategory",
+      "type": "object"
+    },
+    "RequirementFinding": {
+      "additionalProperties": false,
+      "properties": {
+        "priority": {
+          "default": "Important",
+          "enum": [
+            "Important",
+            "Would help",
+            "Nice to have"
+          ],
+          "title": "Priority",
+          "type": "string"
+        },
+        "recommendation": {
+          "default": "",
+          "title": "Recommendation",
+          "type": "string"
+        },
+        "requirement": {
+          "default": "",
+          "title": "Requirement",
+          "type": "string"
+        },
+        "resume_evidence": {
+          "default": "Not found in resume.",
+          "title": "Resume Evidence",
+          "type": "string"
+        },
+        "status": {
+          "default": "Missing",
+          "enum": [
+            "Supported",
+            "Partial",
+            "Missing"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "title": "RequirementFinding",
+      "type": "object"
+    },
+    "ResumeFix": {
+      "additionalProperties": false,
+      "properties": {
+        "issue": {
+          "default": "",
+          "title": "Issue",
+          "type": "string"
+        },
+        "priority": {
+          "default": "Would help",
+          "enum": [
+            "Important",
+            "Would help",
+            "Nice to have"
+          ],
+          "title": "Priority",
+          "type": "string"
+        },
+        "suggested_fix": {
+          "default": "",
+          "title": "Suggested Fix",
+          "type": "string"
+        },
+        "why_it_matters": {
+          "default": "",
+          "title": "Why It Matters",
+          "type": "string"
+        }
+      },
+      "title": "ResumeFix",
+      "type": "object"
+    },
+    "ScoreDriver": {
+      "additionalProperties": false,
+      "properties": {
+        "contribution": {
+          "default": 0,
+          "maximum": 100,
+          "minimum": -100,
+          "title": "Contribution",
+          "type": "integer"
+        },
+        "direction": {
+          "default": "Positive",
+          "enum": [
+            "Positive",
+            "Negative"
+          ],
+          "title": "Direction",
+          "type": "string"
+        },
+        "driver": {
+          "default": "",
+          "title": "Driver",
+          "type": "string"
+        },
+        "evidence": {
+          "default": "",
+          "title": "Evidence",
+          "type": "string"
+        }
+      },
+      "title": "ScoreDriver",
+      "type": "object"
+    },
+    "ScoreModel": {
+      "additionalProperties": false,
+      "properties": {
+        "ats_keyword_coverage_score": {
+          "default": 0,
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Ats Keyword Coverage Score",
+          "type": "integer"
+        },
+        "eligibility_score": {
+          "default": 0,
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Eligibility Score",
+          "type": "integer"
+        },
+        "experience_match_score": {
+          "default": 0,
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Experience Match Score",
+          "type": "integer"
+        },
+        "match_label": {
+          "default": "Weak Match",
+          "enum": [
+            "Strong Match",
+            "Good Match",
+            "Partial Match",
+            "Weak Match"
+          ],
+          "title": "Match Label",
+          "type": "string"
+        },
+        "overall_match_score": {
+          "default": 0,
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Overall Match Score",
+          "type": "integer"
+        },
+        "resume_evidence_score": {
+          "default": 0,
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Resume Evidence Score",
+          "type": "integer"
+        },
+        "technical_match_score": {
+          "default": 0,
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Technical Match Score",
+          "type": "integer"
+        }
+      },
+      "title": "ScoreModel",
+      "type": "object"
+    },
+    "SkillsAnalysis": {
+      "additionalProperties": false,
+      "properties": {
+        "matched_skills": {
+          "items": {
+            "$ref": "#/$defs/MatchedSkill"
+          },
+          "title": "Matched Skills",
+          "type": "array"
+        },
+        "missing_skills": {
+          "items": {
+            "$ref": "#/$defs/MissingSkill"
+          },
+          "title": "Missing Skills",
+          "type": "array"
+        },
+        "nice_to_have_skills": {
+          "items": {
+            "$ref": "#/$defs/NiceToHaveSkill"
+          },
+          "title": "Nice To Have Skills",
+          "type": "array"
+        }
+      },
+      "title": "SkillsAnalysis",
+      "type": "object"
+    },
+    "TailoredBullet": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_status": {
+          "default": "Unsafe",
+          "enum": [
+            "Supported",
+            "Partial",
+            "Unsafe"
+          ],
+          "title": "Evidence Status",
+          "type": "string"
+        },
+        "original_or_source": {
+          "default": "",
+          "title": "Original Or Source",
+          "type": "string"
+        },
+        "rewritten": {
+          "default": "",
+          "title": "Rewritten",
+          "type": "string"
+        },
+        "why_improved": {
+          "default": "",
+          "title": "Why Improved",
+          "type": "string"
+        }
+      },
+      "title": "TailoredBullet",
+      "type": "object"
+    },
+    "TailoredResumeContent": {
+      "additionalProperties": false,
+      "properties": {
+        "rewritten_bullets": {
+          "items": {
+            "$ref": "#/$defs/TailoredBullet"
+          },
+          "title": "Rewritten Bullets",
+          "type": "array"
+        },
+        "tailored_summary": {
+          "default": "",
+          "title": "Tailored Summary",
+          "type": "string"
+        }
+      },
+      "title": "TailoredResumeContent",
+      "type": "object"
+    },
+    "TimelineFinding": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence": {
+          "default": "",
+          "title": "Evidence",
+          "type": "string"
+        },
+        "issue": {
+          "default": "",
+          "title": "Issue",
+          "type": "string"
+        },
+        "recommendation": {
+          "default": "",
+          "title": "Recommendation",
+          "type": "string"
+        },
+        "severity": {
+          "default": "Medium",
+          "enum": [
+            "High",
+            "Medium",
+            "Low"
+          ],
+          "title": "Severity",
+          "type": "string"
+        }
+      },
+      "title": "TimelineFinding",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "ats_keyword_coverage": {
+      "items": {
+        "$ref": "#/$defs/AtsKeywordCoverage"
+      },
+      "title": "Ats Keyword Coverage",
+      "type": "array"
+    },
+    "ats_score_breakdown": {
+      "items": {
+        "$ref": "#/$defs/AtsScoreBreakdown"
+      },
+      "title": "Ats Score Breakdown",
+      "type": "array"
+    },
+    "before_after_bullets": {
+      "items": {
+        "$ref": "#/$defs/BulletRewrite"
+      },
+      "title": "Before After Bullets",
+      "type": "array"
+    },
+    "certification_suggestions": {
+      "items": {
+        "$ref": "#/$defs/CertificationSuggestion"
+      },
+      "title": "Certification Suggestions",
+      "type": "array"
+    },
+    "confidence_findings": {
+      "items": {
+        "$ref": "#/$defs/ConfidenceFinding"
+      },
+      "title": "Confidence Findings",
+      "type": "array"
+    },
+    "cover_letter": {
+      "title": "Cover Letter",
+      "type": "string"
+    },
+    "eligibility_risks": {
+      "items": {
+        "$ref": "#/$defs/EligibilityRisk"
+      },
+      "title": "Eligibility Risks",
+      "type": "array"
+    },
+    "evidence_based_matches": {
+      "items": {
+        "$ref": "#/$defs/EvidenceMatch"
+      },
+      "title": "Evidence Based Matches",
+      "type": "array"
+    },
+    "fix_impact_matrix": {
+      "items": {
+        "$ref": "#/$defs/FixImpact"
+      },
+      "title": "Fix Impact Matrix",
+      "type": "array"
+    },
+    "hallucination_guardrail": {
+      "items": {
+        "$ref": "#/$defs/GuardrailFinding"
+      },
+      "title": "Hallucination Guardrail",
+      "type": "array"
+    },
+    "jd_red_flags": {
+      "items": {
+        "$ref": "#/$defs/JdRedFlag"
+      },
+      "title": "Jd Red Flags",
+      "type": "array"
+    },
+    "jd_requirements": {
+      "$ref": "#/$defs/JdRequirements"
+    },
+    "job_details": {
+      "$ref": "#/$defs/JobDetails"
+    },
+    "match_summary": {
+      "$ref": "#/$defs/MatchSummary"
+    },
+    "project_suggestions": {
+      "items": {
+        "$ref": "#/$defs/ProjectSuggestion"
+      },
+      "title": "Project Suggestions",
+      "type": "array"
+    },
+    "resume_fix_suggestions": {
+      "items": {
+        "$ref": "#/$defs/ResumeFix"
+      },
+      "title": "Resume Fix Suggestions",
+      "type": "array"
+    },
+    "resume_timeline_check": {
+      "items": {
+        "$ref": "#/$defs/TimelineFinding"
+      },
+      "title": "Resume Timeline Check",
+      "type": "array"
+    },
+    "score_drivers": {
+      "items": {
+        "$ref": "#/$defs/ScoreDriver"
+      },
+      "title": "Score Drivers",
+      "type": "array"
+    },
+    "scores": {
+      "$ref": "#/$defs/ScoreModel"
+    },
+    "skill_gap_learning_plan": {
+      "items": {
+        "$ref": "#/$defs/LearningPlanItem"
+      },
+      "title": "Skill Gap Learning Plan",
+      "type": "array"
+    },
+    "skills_analysis": {
+      "$ref": "#/$defs/SkillsAnalysis"
+    },
+    "tailored_resume_content": {
+      "$ref": "#/$defs/TailoredResumeContent"
+    }
+  },
+  "required": [
+    "job_details",
+    "scores",
+    "match_summary",
+    "jd_red_flags",
+    "jd_requirements",
+    "skills_analysis",
+    "ats_keyword_coverage",
+    "ats_score_breakdown",
+    "score_drivers",
+    "confidence_findings",
+    "fix_impact_matrix",
+    "eligibility_risks",
+    "evidence_based_matches",
+    "hallucination_guardrail",
+    "before_after_bullets",
+    "resume_timeline_check",
+    "resume_fix_suggestions",
+    "skill_gap_learning_plan",
+    "project_suggestions",
+    "certification_suggestions",
+    "tailored_resume_content",
+    "cover_letter"
+  ],
+  "title": "LLMAnalysisResultModel",
+  "type": "object"
+}

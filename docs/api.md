@@ -1,6 +1,6 @@
 # FastAPI Backend
 
-The API backend lives in `apps/api` and can run independently from Streamlit. Phase 0 production safeguards, Phase 1 authentication/ownership, the Phase 2 durable analysis lifecycle, and Phase 3 privacy controls are implemented.
+The API backend lives in `apps/api` and can run independently from Streamlit. Phase 0 production safeguards, Phase 1 authentication/ownership, the Phase 2 durable analysis lifecycle, Phase 3 privacy controls, and Phase 4 LLM boundary hardening are implemented.
 
 ## Run Locally
 
@@ -42,6 +42,18 @@ Routes call service modules instead of embedding business logic directly:
 - `apps/api/app/analysis_queue.py` dispatches work to a local background task or Redis/RQ.
 - `apps/api/app/tasks.py` is the worker entry point for provider-backed analysis.
 - `source/ai`, `source/loaders`, and `source/services` remain the shared business logic used by both Streamlit and the API.
+
+## LLM response contract
+
+Provider output is untrusted until it validates against nested Pydantic models in `source/ai/schemas.py`. Scores, findings, requirements, skills, evidence, fixes, risks, and rewrites forbid unknown fields and validate their ranges and status labels. Missing top-level analysis sections, malformed nested values, unexpected fields, and out-of-range scores fail the run with a typed provider-response error.
+
+The provider-facing JSON Schema is generated from those models and checked in at [`analysis-result.schema.json`](analysis-result.schema.json). Regenerate it after an intentional contract change:
+
+```bash
+python scripts/export_analysis_schema.py
+```
+
+Prompts label resume, JD, and project text as untrusted JSON-string data. Higher-priority instructions explicitly reject commands embedded in those documents, including score manipulation, role changes, schema changes, secret requests, and unsupported claims.
 
 ## Frontend
 

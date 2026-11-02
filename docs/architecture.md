@@ -39,6 +39,7 @@ flowchart LR
 - `source/pages/` contains user-facing page flows.
 - `source/loaders/` validates and extracts resume/JD text.
 - `source/ai/` builds prompts, calls LLM providers, validates structured output, and handles retry/fallback behavior.
+- `source/ai/schemas.py` is the source of truth for the provider contract. It generates the checked-in JSON Schema and rejects unknown or malformed nested output before persistence or rendering.
 - `source/services/` contains product logic that is not page-specific: evidence scoring, proof mapping, PDF export, job tracking, URL validation, sample reports, and observability.
 - `source/ui/` contains reusable Streamlit cards, charts, tables, layout helpers, text cleanup, and styles.
 - `tests/` covers loaders, provider fallback, observability, scoring, report generation, tracker behavior, URL handling, and UI cleanup.

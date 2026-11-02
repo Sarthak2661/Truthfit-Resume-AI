@@ -41,10 +41,9 @@ def sample_analysis() -> dict:
             "matched_skills": [
                 {
                     "skill": "Python",
-                    "status": "Covered",
-                    "importance": "Important",
+                    "category": "Programming",
+                    "evidence_status": "Supported",
                     "resume_evidence": "Built Python ETL pipelines.",
-                    "action": "Keep visible.",
                 }
             ],
             "missing_skills": [],
@@ -52,7 +51,14 @@ def sample_analysis() -> dict:
         },
         "tailored_resume_content": {
             "tailored_summary": "Data engineer with Python and SQL experience.",
-            "rewritten_bullets": ["Built Python ETL pipelines with SQL validation."],
+            "rewritten_bullets": [
+                {
+                    "original_or_source": "Worked on data tasks.",
+                    "rewritten": "Built Python ETL pipelines with SQL validation.",
+                    "evidence_status": "Supported",
+                    "why_improved": "Adds supported tools and scope.",
+                }
+            ],
         },
         "before_after_bullets": [
             {
@@ -476,7 +482,7 @@ def test_tailor_returns_resume_improvement_sections(tmp_path):
     body = response.json()
     assert response.status_code == 200
     assert body["tailored_resume_content"]["tailored_summary"].startswith("Data engineer")
-    assert body["before_after_bullets"][0]["after"].startswith("Built Python")
+    assert body["before_after_bullets"][0]["rewritten"].startswith("Built Python")
     assert body["cover_letter"] == "Dear hiring team..."
 
 

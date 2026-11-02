@@ -33,6 +33,19 @@ Status: implemented.
 
 Operational follow-up: define a key-rotation procedure, schedule cleanup in each deployed environment, and add retention audit metrics.
 
+## LLM Phase 4: Boundary And Schema Hardening
+
+Status: implemented.
+
+- Important nested response sections use strict Pydantic models with unknown fields forbidden.
+- Provider responses require every top-level analysis section and reject malformed nested structures.
+- The expected JSON Schema is generated from the validation models and protected by a drift test.
+- Resume, JD, and project blocks are explicitly marked as untrusted data in prompts.
+- Document-borne requests to change scores, reveal secrets, alter schemas, or change tasks are explicitly ignored.
+- Automated tests cover malformed JSON structures and adversarial prompt-injection fixtures.
+
+Operational follow-up: add a versioned live-provider evaluation set to measure injection resistance and schema-valid response rates across model upgrades.
+
 ## Reliability Phase 2: Analysis Lifecycle
 
 Status: implemented.

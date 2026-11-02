@@ -1,9 +1,11 @@
 import json
+from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from source.ai.llm_client import extract_json
-from source.ai.schemas import validate_analysis_result
+from source.ai.schemas import analysis_json_schema, validate_analysis_result
 
 
 def test_extract_json_from_plain_json():
@@ -29,16 +31,37 @@ def test_extract_json_rejects_empty_response():
         extract_json("")
 
 
-def test_validate_analysis_result_fills_missing_sections_and_clamps_scores():
-    result = validate_analysis_result(
-        {
-            "scores": {"overall_match_score": 140, "technical_match_score": "bad"},
-            "ats_keyword_coverage": "not a list",
-        }
-    )
+def test_validate_analysis_result_fills_missing_sections():
+    result = validate_analysis_result({"scores": {"overall_match_score": 74}})
 
-    assert result["scores"]["overall_match_score"] == 100
-    assert result["scores"]["technical_match_score"] == 0
-    assert result["ats_keyword_coverage"] == []
+    assert result["scores"]["overall_match_score"] == 74
     assert "job_details" in result
     assert "skills_analysis" in result
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"scores": {"overall_match_score": 140}},
+        {"skills_analysis": {"matched_skills": "not a list"}},
+        {"confidence_findings": [{"finding": "Python", "unexpected": "field"}]},
+    ],
+)
+def test_validate_analysis_result_rejects_invalid_nested_structures(payload):
+    with pytest.raises(ValidationError):
+        validate_analysis_result(payload)
+
+
+def test_generated_schema_forbids_unknown_fields():
+    schema = analysis_json_schema()
+
+    assert schema["additionalProperties"] is False
+    assert schema["$defs"]["ScoreModel"]["additionalProperties"] is False
+    assert schema["$defs"]["ConfidenceFinding"]["additionalProperties"] is False
+    assert set(schema["required"]) >= {"scores", "skills_analysis", "confidence_findings"}
+
+
+def test_checked_in_schema_matches_pydantic_contract():
+    schema_path = Path(__file__).resolve().parents[1] / "docs" / "analysis-result.schema.json"
+
+    assert json.loads(schema_path.read_text(encoding="utf-8")) == analysis_json_schema()

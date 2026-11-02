@@ -1,59 +1,29 @@
-export const API_URL = process.env.NEXT_PUBLIC_TRUTHFIT_API_URL ?? "http://127.0.0.1:8000";
+import "server-only";
 
-export type AnalysisListItem = {
-  run_id: string;
-  status: string;
-  provider: string;
-  model: string;
-  overall_score: number;
-  job_title: string;
-  company: string;
-  created_at: string;
-  completed_at?: string | null;
-};
+import { API_URL } from "./api-config";
+import type {
+  AnalysisResponse,
+  DashboardSummary,
+  ProviderInfo,
+  TrackerItem,
+} from "./api-types";
+import { createClient } from "./supabase/server";
 
-export type DashboardSummary = {
-  total_runs: number;
-  completed_runs: number;
-  failed_runs: number;
-  average_match_score: number;
-  common_skill_gaps: Array<{ skill: string; count: number }>;
-  provider_usage: Array<{ provider: string; runs: number }>;
-  recent_analyses: AnalysisListItem[];
-};
-
-export type ProviderInfo = {
-  name: string;
-  models: string[];
-  default_model: string;
-};
-
-export type TrackerItem = {
-  run_id: string;
-  role: string;
-  company: string;
-  location: string;
-  job_link: string;
-  match_score: number;
-  tracker_status: string;
-  notes: string;
-  top_fixes: string[];
-  analysis_url: string;
-  created_at: string;
-};
-
-export type AnalysisResponse = {
-  run_id: string;
-  status: string;
-  provider: string;
-  model: string;
-  overall_score: number;
-  analysis: Record<string, any>;
-};
+export type { AnalysisListItem, ProviderInfo } from "./api-types";
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.getSession();
+  const accessToken = data.session?.access_token;
+  if (error || !accessToken) {
+    throw new Error("Authentication is required.");
+  }
+
+  const headers = new Headers(init?.headers);
+  headers.set("authorization", `Bearer ${accessToken}`);
   const response = await fetch(`${API_URL}${path}`, {
     ...init,
+    headers,
     cache: "no-store",
   });
 

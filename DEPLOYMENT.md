@@ -7,6 +7,8 @@ The repo now contains two runnable interfaces:
 - Streamlit v1 at `app.py`
 - Next.js frontend at `apps/web`, backed by the FastAPI API at `apps/api`
 
+The product path includes the completed Phase 0 reliability controls and Phase 1 authentication/ownership controls. FastAPI validates Supabase access tokens and scopes persisted records to the verified account.
+
 ## Streamlit Cloud
 
 1. Push this project to GitHub.
@@ -40,7 +42,7 @@ For a public portfolio deployment, the safest setup is to avoid hosted keys and 
 
 ## API and Database Deployment
 
-The Streamlit app can still run by itself for portfolio use. The FastAPI backend is currently suitable for trusted development use: authentication and record ownership checks are not implemented. Configure the database and run migrations before starting the API:
+The Streamlit app can still run by itself for portfolio use. The FastAPI backend verifies Supabase access tokens and scopes persisted records to the authenticated user. Configure Supabase, the database, and migrations before starting the API:
 
 ```bash
 uvicorn apps.api.app.main:app --host 127.0.0.1 --port 8000
@@ -50,9 +52,11 @@ For PostgreSQL persistence, set:
 
 ```text
 DATABASE_URL=postgresql+psycopg://user:password@host:5432/truthfit
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_JWT_AUDIENCE=authenticated
 ```
 
-Set this as an environment variable for both the migration process and API process. Alembic does not automatically load `.env`. See [database setup](docs/api.md#database) for PowerShell instructions and handling an existing database.
+Use the same database URL for both the migration process and API process. Alembic loads the repository root `.env`, while an explicitly exported environment variable takes precedence. See [database setup](docs/api.md#database) for PowerShell instructions and handling an existing database.
 
 Then run:
 
@@ -62,6 +66,13 @@ alembic upgrade head
 
 If `DATABASE_URL` is not set, the API uses local SQLite at `.truthfit/truthfit.db`, which is useful for development but not for production hosting.
 
+### Authentication data versus application data
+
+- Supabase Auth stores account identities in its managed `auth.users` table. View them in **Authentication > Users** rather than the `public` schema visualizer.
+- TruthFit creates its own `users` row when an authenticated account first calls a protected API workflow.
+- That application row, resumes, jobs, analyses, evidence, and tracker state are stored wherever `DATABASE_URL` points.
+- A localhost URL means Supabase can authenticate the user while all TruthFit application tables remain in local PostgreSQL. Use a hosted PostgreSQL connection string for a deployed API.
+
 ## Next.js Frontend Deployment
 
 Deploy `apps/web` to a Next.js host such as Vercel, Netlify, or a Node-capable container platform.
@@ -70,7 +81,12 @@ Set the frontend environment variable to the public API host:
 
 ```text
 NEXT_PUBLIC_TRUTHFIT_API_URL=https://your-api-host
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_publishable_key
+NEXT_PUBLIC_HCAPTCHA_SITE_KEY=your_hcaptcha_site_key
 ```
+
+Enable hCaptcha in Supabase under Authentication > Bot and Abuse Protection and store the hCaptcha secret there. Only the hCaptcha site key belongs in the public frontend environment.
 
 Build command:
 
@@ -96,4 +112,4 @@ The Next.js app will not run the analysis workflow by itself; it requires the Fa
 
 Resume and job description text may be sent to the selected provider during live analysis. Do not upload sensitive documents unless you are comfortable sending that content to the selected provider.
 
-The API also stores original and redacted resume text, JD text, user email, results, and evidence on successful analyses. Configure database access, backups, and retention before using real data. Streamlit's session-only analysis and local JSON tracker remain separate from this database.
+The API stores original and redacted resume text, JD text, authenticated owner, results, and evidence on successful analyses. Ownership is enforced, but encryption, retention, and account-deletion controls still need to be configured before using sensitive real-world data. Streamlit's session-only analysis and local JSON tracker remain separate from this database.

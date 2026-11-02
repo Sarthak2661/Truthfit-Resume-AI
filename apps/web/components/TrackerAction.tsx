@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { API_URL } from "../lib/api";
+import { authenticatedFetch } from "../lib/authenticated-fetch";
 
 const statuses = ["Saved", "Applied", "Interview", "Rejected"];
 
@@ -24,7 +24,7 @@ export function TrackerAction({
     setMessage("");
 
     try {
-      const response = await fetch(`${API_URL}/tracker/${runId}`, {
+      const response = await authenticatedFetch(`/tracker/${runId}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ status: nextStatus, notes }),

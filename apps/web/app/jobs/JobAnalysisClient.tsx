@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { API_URL } from "../../lib/api";
-import type { ProviderInfo } from "../../lib/api";
+import { authenticatedFetch } from "../../lib/authenticated-fetch";
+import type { ProviderInfo } from "../../lib/api-types";
 
 type JobParseResult = {
   text: string;
@@ -100,7 +100,7 @@ export function JobAnalysisClient({ providers }: { providers: ProviderInfo[] }) 
     try {
       const form = new globalThis.FormData();
       form.set("file", fileInput.files[0]);
-      const response = await fetch(`${API_URL}/resumes/parse`, { method: "POST", body: form });
+      const response = await authenticatedFetch("/resumes/parse", { method: "POST", body: form });
 
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
@@ -143,7 +143,7 @@ export function JobAnalysisClient({ providers }: { providers: ProviderInfo[] }) 
       body.set("pasted_text", pastedText);
       body.set("job_link", jobLink);
 
-      const response = await fetch(`${API_URL}/jobs/parse`, { method: "POST", body });
+      const response = await authenticatedFetch("/jobs/parse", { method: "POST", body });
 
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
@@ -172,40 +172,47 @@ export function JobAnalysisClient({ providers }: { providers: ProviderInfo[] }) 
     setLoading(true);
     setError("");
 
-    const form = new FormData(analysisFormRef.current);
-    const jobDescription = job?.text || String(form.get("job_description") ?? "");
-    const jobLink = job?.job_link || String(form.get("job_link") ?? "");
+    try {
+      const form = new FormData(analysisFormRef.current);
+      const jobDescription = job?.text || String(form.get("job_description") ?? "");
+      const jobLink = job?.job_link || String(form.get("job_link") ?? "");
 
-    const response = await fetch(`${API_URL}/analysis/run`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        resume_text: resumeText,
-        resume_file_name: resumeFileName,
-        job_description: jobDescription,
-        job_link: jobLink,
-        job_title: form.get("job_title"),
-        company: form.get("company"),
-        include_cover_letter: form.get("include_cover_letter") === "on",
-        user_projects: form.get("user_projects"),
-        provider,
-        model,
-        api_key: apiKey,
-        user_email: "",
-        resume_formatting_checks: resume?.ats_formatting_checks ?? [],
-        target_region: targetRegion,
-      }),
-    });
+      const response = await authenticatedFetch("/analysis/run", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          resume_text: resumeText,
+          resume_file_name: resumeFileName,
+          job_description: jobDescription,
+          job_link: jobLink,
+          job_title: form.get("job_title"),
+          company: form.get("company"),
+          include_cover_letter: form.get("include_cover_letter") === "on",
+          user_projects: form.get("user_projects"),
+          provider,
+          model,
+          api_key: apiKey,
+          resume_formatting_checks: resume?.ats_formatting_checks ?? [],
+          target_region: targetRegion,
+        }),
+      });
 
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      setError(body.detail ?? "Analysis failed.");
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail ?? "Analysis failed.");
+      }
+
+      const created = await response.json();
+      window.location.assign(`/analysis/${created.run_id}`);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Analysis could not start. Check the API connection and try again.",
+      );
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const created = await response.json();
-    window.location.href = `/analysis/${created.run_id}`;
   }
 
   return (

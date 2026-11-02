@@ -1,6 +1,7 @@
+from datetime import date
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from source.ai.providers import PROVIDER_MODELS
 
@@ -50,6 +51,8 @@ class ProvidersResponse(BaseModel):
 
 
 class AnalysisRunRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     resume_text: str = Field(min_length=1)
     job_description: str = Field(min_length=1)
     include_cover_letter: bool = False
@@ -58,7 +61,6 @@ class AnalysisRunRequest(BaseModel):
     model: str = ""
     api_key: str = ""
     job_link: str = ""
-    user_email: str = ""
     resume_file_name: str = "api-resume.txt"
     job_title: str = ""
     company: str = ""
@@ -97,6 +99,7 @@ class AnalysisListItem(BaseModel):
     overall_score: int
     job_title: str = ""
     company: str = ""
+    resume_file_name: str = ""
     created_at: str
     completed_at: str | None = None
 
@@ -113,11 +116,18 @@ class DashboardSummaryResponse(BaseModel):
     common_skill_gaps: list[dict[str, Any]]
     provider_usage: list[dict[str, Any]]
     recent_analyses: list[AnalysisListItem]
+    tracker_status_counts: dict[str, int] = Field(default_factory=dict)
+    score_history: list[dict[str, Any]] = Field(default_factory=list)
+    resume_versions: list[dict[str, Any]] = Field(default_factory=list)
+    upcoming_actions: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class TrackerUpdateRequest(BaseModel):
     status: str = "Saved"
     notes: str = ""
+    priority: str | None = None
+    applied_at: str | None = None
+    follow_up_date: str | None = None
 
     @field_validator("status")
     @classmethod
@@ -127,6 +137,26 @@ class TrackerUpdateRequest(BaseModel):
         if status not in allowed:
             raise ValueError(f"Unsupported tracker status: {status}")
         return status
+
+    @field_validator("priority")
+    @classmethod
+    def validate_priority(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        priority = value.strip().title()
+        if priority not in {"Low", "Normal", "High"}:
+            raise ValueError(f"Unsupported tracker priority: {priority}")
+        return priority
+
+    @field_validator("applied_at", "follow_up_date")
+    @classmethod
+    def validate_optional_date(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        clean_value = value.strip()
+        if clean_value:
+            date.fromisoformat(clean_value)
+        return clean_value
 
 
 class TrackerItem(BaseModel):
@@ -138,6 +168,10 @@ class TrackerItem(BaseModel):
     match_score: int
     tracker_status: str
     notes: str = ""
+    priority: str = "Normal"
+    applied_at: str = ""
+    follow_up_date: str = ""
+    updated_at: str = ""
     top_fixes: list[str] = Field(default_factory=list)
     analysis_url: str
     created_at: str

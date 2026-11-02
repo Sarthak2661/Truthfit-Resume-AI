@@ -3,10 +3,14 @@ import os
 from pathlib import Path
 
 from alembic import context
+from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
 
 from apps.api.app.db.models import Base
 from apps.api.app.db.database import DEFAULT_DATABASE_URL
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+load_dotenv(PROJECT_ROOT / ".env")
 
 config = context.config
 

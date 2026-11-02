@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
+import { AuthControls } from "../components/AuthControls";
+import { ThemeToggle } from "../components/ThemeToggle";
 
 export const metadata: Metadata = {
   title: "TruthFit Resume AI",
@@ -14,10 +16,25 @@ const links = [
   ["/tracker", "Tracker"],
 ];
 
+const themeScript = `
+  (() => {
+    try {
+      const saved = localStorage.getItem("truthfit-theme");
+      const preferred = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      document.documentElement.dataset.theme = saved === "dark" || saved === "light" ? saved : preferred;
+    } catch (_) {
+      document.documentElement.dataset.theme = "light";
+    }
+  })();
+`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body>
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
+      <body suppressHydrationWarning>
         <div className="shell">
           <header className="topbar">
             <Link className="brand" href="/">
@@ -30,6 +47,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   {label}
                 </Link>
               ))}
+              <ThemeToggle />
+              <AuthControls />
             </nav>
           </header>
           <main className="main">{children}</main>

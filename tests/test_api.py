@@ -1,13 +1,19 @@
 from fastapi.testclient import TestClient
 
+from apps.api.app.auth import CurrentUser, get_current_user
 from apps.api.app.db.database import configure_database_for_tests
 from apps.api.app.main import create_app
 
+TEST_USER_A = CurrentUser(subject="supabase-user-a", email="a@example.com")
+TEST_USER_B = CurrentUser(subject="supabase-user-b", email="b@example.com")
 
-def client(tmp_path) -> TestClient:
+
+def client(tmp_path, current_user: CurrentUser = TEST_USER_A) -> TestClient:
     db_path = tmp_path / "truthfit-test.db"
     configure_database_for_tests(f"sqlite:///{db_path.as_posix()}")
-    return TestClient(create_app())
+    app = create_app()
+    app.dependency_overrides[get_current_user] = lambda: current_user
+    return TestClient(app)
 
 
 def sample_analysis() -> dict:
@@ -72,6 +78,20 @@ def test_health_and_providers_endpoints(tmp_path):
     assert health.json()["database"] == "ok"
     assert providers.status_code == 200
     assert providers.json()["providers"][0]["name"] == "Gemini"
+
+
+def test_protected_routes_require_authentication(tmp_path):
+    db_path = tmp_path / "truthfit-unauthenticated.db"
+    configure_database_for_tests(f"sqlite:///{db_path.as_posix()}")
+    api = TestClient(create_app())
+
+    assert api.get("/analysis").status_code == 401
+    assert api.get("/dashboard/summary").status_code == 401
+    assert api.get("/tracker").status_code == 401
+    assert api.post(
+        "/resumes/parse",
+        files={"file": ("resume.txt", b"Python SQL", "text/plain")},
+    ).status_code == 401
 
 
 def test_parse_resume_redacts_personal_details(tmp_path):
@@ -218,7 +238,6 @@ def test_run_analysis_stores_completed_result(monkeypatch, tmp_path):
             "provider": "Gemini",
             "model": "gemini-3.6-flash",
             "job_link": "https://example.com/job/123",
-            "user_email": "demo@example.com",
             "resume_file_name": "resume.txt",
             "job_title": "Data Engineer",
             "company": "Northstar Analytics",
@@ -259,8 +278,20 @@ def test_run_analysis_stores_completed_result(monkeypatch, tmp_path):
     assert summary.json()["total_runs"] == 1
     assert summary.json()["completed_runs"] == 1
     assert summary.json()["average_match_score"] == 82.0
+    assert summary.json()["score_history"][0]["score"] == 82
+    assert summary.json()["resume_versions"][0]["role"] == "Data Engineer"
+    assert summary.json()["resume_versions"][0]["latest_resume_file_name"] == "resume.txt"
 
-    saved = api.post(f"/tracker/{body['run_id']}", json={"status": "Applied", "notes": "Follow up next week."})
+    saved = api.post(
+        f"/tracker/{body['run_id']}",
+        json={
+            "status": "Applied",
+            "notes": "Follow up next week.",
+            "priority": "High",
+            "applied_at": "2026-11-02",
+            "follow_up_date": "2026-11-09",
+        },
+    )
     assert saved.status_code == 200
     assert saved.json()["tracker_status"] == "Applied"
     assert saved.json()["match_score"] == 82
@@ -268,12 +299,19 @@ def test_run_analysis_stores_completed_result(monkeypatch, tmp_path):
     assert saved.json()["role"] == "Data Engineer"
     assert saved.json()["job_link"] == "https://example.com/job/123"
     assert saved.json()["notes"] == "Follow up next week."
+    assert saved.json()["priority"] == "High"
+    assert saved.json()["applied_at"] == "2026-11-02"
+    assert saved.json()["follow_up_date"] == "2026-11-09"
     assert saved.json()["analysis_url"] == f"/analysis/{body['run_id']}"
 
     tracker = api.get("/tracker")
     assert tracker.status_code == 200
     assert tracker.json()["jobs"][0]["run_id"] == body["run_id"]
     assert tracker.json()["jobs"][0]["tracker_status"] == "Applied"
+
+    tracked_summary = api.get("/dashboard/summary").json()
+    assert tracked_summary["tracker_status_counts"]["Applied"] == 1
+    assert tracked_summary["upcoming_actions"][0]["follow_up_date"] == "2026-11-09"
 
 
 def test_region_context_is_sent_to_model(monkeypatch, tmp_path):
@@ -352,7 +390,6 @@ def test_completed_analysis_can_be_read_without_rerunning_model(monkeypatch, tmp
             "job_description": "Data Engineer with Python and SQL",
             "provider": "Gemini",
             "model": "gemini-3.6-flash",
-            "user_email": "returning@example.com",
         },
     ).json()
 
@@ -378,10 +415,57 @@ def test_tailor_returns_resume_improvement_sections(tmp_path):
     assert body["cover_letter"] == "Dear hiring team..."
 
 
-def test_missing_analysis_run_returns_400(tmp_path):
+def test_missing_analysis_run_returns_404(tmp_path):
     api = client(tmp_path)
 
     response = api.get("/analysis/not-a-real-run")
 
-    assert response.status_code == 400
+    assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
+
+
+def test_client_cannot_choose_record_owner(monkeypatch, tmp_path):
+    from apps.api.app.services import analysis_service
+
+    monkeypatch.setattr(analysis_service, "generate_resume_analysis", lambda **_: sample_analysis())
+    api = client(tmp_path)
+
+    response = api.post(
+        "/analysis/run",
+        json={
+            "resume_text": "Python ETL SQL",
+            "job_description": "Data Engineer with Python and SQL",
+            "provider": "Gemini",
+            "user_email": "victim@example.com",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_cross_user_analysis_and_tracker_access_returns_404(monkeypatch, tmp_path):
+    from apps.api.app.services import analysis_service
+
+    monkeypatch.setattr(analysis_service, "generate_resume_analysis", lambda **_: sample_analysis())
+    api = client(tmp_path, TEST_USER_A)
+
+    created = api.post(
+        "/analysis/run",
+        json={
+            "resume_text": "Python ETL SQL",
+            "job_description": "Data Engineer with Python and SQL",
+            "provider": "Gemini",
+            "job_title": "Data Engineer",
+            "company": "Northstar Analytics",
+        },
+    )
+    assert created.status_code == 200
+    run_id = created.json()["run_id"]
+
+    api.app.dependency_overrides[get_current_user] = lambda: TEST_USER_B
+
+    assert api.get(f"/analysis/{run_id}").status_code == 404
+    assert api.post(f"/tracker/{run_id}", json={"status": "Saved"}).status_code == 404
+    assert api.get("/analysis").json()["analyses"] == []
+    assert api.get("/tracker").json()["jobs"] == []
+    assert api.get("/dashboard/summary").json()["total_runs"] == 0

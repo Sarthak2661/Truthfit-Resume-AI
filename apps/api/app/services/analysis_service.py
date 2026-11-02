@@ -1,5 +1,9 @@
+from collections import defaultdict
+
 from apps.api.app.db.database import session_scope
 from apps.api.app.db import repositories
+from apps.api.app.auth import CurrentUser
+from apps.api.app.errors import ResourceNotFoundError
 from apps.api.app.schemas import (
     AnalysisListItem,
     AnalysisListResponse,
@@ -25,13 +29,21 @@ from source.services.url_utils import is_valid_http_url, normalize_http_url
 from source.ui.text_cleanup import normalize_analysis_result
 
 
-def run_analysis(payload: AnalysisRunRequest, request_id: str) -> AnalysisRunResponse:
+def run_analysis(
+    payload: AnalysisRunRequest,
+    request_id: str,
+    current_user: CurrentUser,
+) -> AnalysisRunResponse:
     provider = payload.provider
     model = payload.model or PROVIDER_MODELS[provider][0]
     redacted_resume = redact_personal_details(payload.resume_text)
 
     with session_scope() as session:
-        user = repositories.get_or_create_user(session, payload.user_email)
+        user = repositories.get_or_create_user(
+            session,
+            auth_subject=current_user.subject,
+            email=current_user.email,
+        )
         resume = repositories.create_resume(
             session=session,
             user_id=user.id,
@@ -88,11 +100,12 @@ def run_analysis(payload: AnalysisRunRequest, request_id: str) -> AnalysisRunRes
         return AnalysisRunResponse(request_id=request_id, run_id=run.id, analysis=normalized)
 
 
-def get_analysis_run(run_id: str) -> StoredAnalysisResponse:
+def get_analysis_run(run_id: str, current_user: CurrentUser) -> StoredAnalysisResponse:
     with session_scope() as session:
-        run = repositories.get_analysis_run(session, run_id)
+        user = _resolve_user(session, current_user)
+        run = repositories.get_analysis_run(session, run_id, user.id)
         if run is None:
-            raise ValueError(f"Analysis run not found: {run_id}")
+            raise ResourceNotFoundError("Analysis run not found.")
 
         return StoredAnalysisResponse(
             run_id=run.id,
@@ -104,45 +117,70 @@ def get_analysis_run(run_id: str) -> StoredAnalysisResponse:
         )
 
 
-def list_analysis_runs(limit: int = 20) -> AnalysisListResponse:
+def list_analysis_runs(current_user: CurrentUser, limit: int = 20) -> AnalysisListResponse:
     with session_scope() as session:
-        runs = repositories.list_analysis_runs(session, limit=limit)
+        user = _resolve_user(session, current_user)
+        runs = repositories.list_analysis_runs(session, user.id, limit=limit)
         return AnalysisListResponse(analyses=[_analysis_list_item(run) for run in runs])
 
 
-def dashboard_summary() -> DashboardSummaryResponse:
+def dashboard_summary(current_user: CurrentUser) -> DashboardSummaryResponse:
     with session_scope() as session:
-        counts = repositories.analysis_counts(session)
-        recent_runs = repositories.list_analysis_runs(session, limit=8)
+        user = _resolve_user(session, current_user)
+        counts = repositories.analysis_counts(session, user.id)
+        recent_runs = repositories.list_analysis_runs(session, user.id, limit=40)
+        tracked_runs = [run for run in recent_runs if _tracker_status(run) != "Not saved"]
 
         return DashboardSummaryResponse(
             total_runs=counts["total"],
             completed_runs=counts["completed"],
             failed_runs=counts["failed"],
-            average_match_score=repositories.average_completed_score(session),
-            common_skill_gaps=repositories.common_skill_gaps(session),
-            provider_usage=repositories.provider_usage(session),
-            recent_analyses=[_analysis_list_item(run) for run in recent_runs],
+            average_match_score=repositories.average_completed_score(session, user.id),
+            common_skill_gaps=repositories.common_skill_gaps(session, user.id),
+            provider_usage=repositories.provider_usage(session, user.id),
+            recent_analyses=[_analysis_list_item(run) for run in recent_runs[:8]],
+            tracker_status_counts=_tracker_status_counts(tracked_runs),
+            score_history=_score_history(recent_runs),
+            resume_versions=_resume_versions(recent_runs),
+            upcoming_actions=_upcoming_actions(tracked_runs),
         )
 
 
-def list_tracked_jobs() -> TrackerResponse:
+def list_tracked_jobs(current_user: CurrentUser) -> TrackerResponse:
     with session_scope() as session:
-        runs = repositories.list_analysis_runs(session, limit=100)
+        user = _resolve_user(session, current_user)
+        runs = repositories.list_analysis_runs(session, user.id, limit=100)
         jobs = [_tracker_item(run) for run in runs if _tracker_status(run) != "Not saved"]
         return TrackerResponse(jobs=jobs)
 
 
-def update_tracked_job(run_id: str, payload: TrackerUpdateRequest) -> TrackerItem:
+def update_tracked_job(
+    run_id: str,
+    payload: TrackerUpdateRequest,
+    current_user: CurrentUser,
+) -> TrackerItem:
     with session_scope() as session:
-        run = repositories.get_analysis_run(session, run_id)
+        user = _resolve_user(session, current_user)
+        run = repositories.get_analysis_run(session, run_id, user.id)
         if run is None:
-            raise ValueError(f"Analysis run not found: {run_id}")
-        repositories.update_tracker_status(session, run, payload.status, payload.notes)
+            raise ResourceNotFoundError("Analysis run not found.")
+        repositories.update_tracker_status(
+            session,
+            run,
+            payload.status,
+            payload.notes,
+            payload.priority,
+            payload.applied_at,
+            payload.follow_up_date,
+        )
         return _tracker_item(run)
 
 
-def tailor_resume(payload: TailorRequest, request_id: str) -> TailorResponse:
+def tailor_resume(
+    payload: TailorRequest,
+    request_id: str,
+    current_user: CurrentUser,
+) -> TailorResponse:
     if payload.analysis:
         analysis = _finalize_analysis(payload.analysis)
     else:
@@ -158,7 +196,7 @@ def tailor_resume(payload: TailorRequest, request_id: str) -> TailorResponse:
             model=payload.model,
             api_key=payload.api_key,
         )
-        analysis = run_analysis(analysis_payload, request_id).analysis
+        analysis = run_analysis(analysis_payload, request_id, current_user).analysis
 
     return TailorResponse(
         request_id=request_id,
@@ -175,6 +213,14 @@ def list_providers() -> ProvidersResponse:
             ProviderInfo(name=name, models=models, default_model=models[0])
             for name, models in PROVIDER_MODELS.items()
         ]
+    )
+
+
+def _resolve_user(session, current_user: CurrentUser):
+    return repositories.get_or_create_user(
+        session,
+        auth_subject=current_user.subject,
+        email=current_user.email,
     )
 
 
@@ -213,6 +259,10 @@ def _tracker_item(run) -> TrackerItem:
         match_score=run.overall_score,
         tracker_status=_tracker_status(run),
         notes=str(tracker.get("notes") or ""),
+        priority=str(tracker.get("priority") or "Normal"),
+        applied_at=str(tracker.get("applied_at") or ""),
+        follow_up_date=str(tracker.get("follow_up_date") or ""),
+        updated_at=str(tracker.get("updated_at") or ""),
         top_fixes=_top_fixes(analysis),
         analysis_url=f"/analysis/{run.id}",
         created_at=run.created_at.isoformat(),
@@ -249,6 +299,82 @@ def _analysis_list_item(run) -> AnalysisListItem:
         overall_score=run.overall_score,
         job_title=run.job.title if run.job else "",
         company=run.job.company if run.job else "",
+        resume_file_name=run.resume.file_name if run.resume else "",
         created_at=run.created_at.isoformat(),
         completed_at=run.completed_at.isoformat() if run.completed_at else None,
     )
+
+
+def _tracker_status_counts(runs) -> dict[str, int]:
+    counts = {"Saved": 0, "Applied": 0, "Interview": 0, "Rejected": 0}
+    for run in runs:
+        status = _tracker_status(run)
+        if status in counts:
+            counts[status] += 1
+    return counts
+
+
+def _score_history(runs) -> list[dict]:
+    completed = [run for run in reversed(runs) if run.status == "completed"][-10:]
+    return [
+        {
+            "run_id": run.id,
+            "score": run.overall_score,
+            "role": (run.job.title if run.job else "") or "Untitled role",
+            "company": (run.job.company if run.job else "") or "Company not specified",
+            "resume_file_name": run.resume.file_name if run.resume else "",
+            "created_at": run.created_at.isoformat(),
+        }
+        for run in completed
+    ]
+
+
+def _resume_versions(runs) -> list[dict]:
+    grouped = defaultdict(list)
+    for run in reversed(runs):
+        if run.status != "completed" or not run.resume:
+            continue
+        role = ((run.job.title if run.job else "") or "Untitled role").strip()
+        company = ((run.job.company if run.job else "") or "Company not specified").strip()
+        grouped[(role.casefold(), company.casefold())].append(run)
+
+    versions = []
+    for items in grouped.values():
+        latest = items[-1]
+        previous = items[-2] if len(items) > 1 else None
+        role = (latest.job.title if latest.job else "") or "Untitled role"
+        company = (latest.job.company if latest.job else "") or "Company not specified"
+        latest_file_name = latest.resume.file_name or "Unnamed resume"
+        versions.append(
+            {
+                "role": role,
+                "company": company,
+                "resume_file_name": latest_file_name,
+                "latest_resume_file_name": latest_file_name,
+                "previous_resume_file_name": previous.resume.file_name if previous and previous.resume else "",
+                "runs": len(items),
+                "latest_score": latest.overall_score,
+                "best_score": max(item.overall_score for item in items),
+                "change": latest.overall_score - previous.overall_score if previous is not None else None,
+                "latest_run_id": latest.id,
+            }
+        )
+    return sorted(versions, key=lambda item: (item["runs"], item["latest_score"]), reverse=True)[:6]
+
+
+def _upcoming_actions(runs) -> list[dict]:
+    actions = []
+    for run in runs:
+        tracker = (run.result_json or {}).get("tracker", {})
+        if not isinstance(tracker, dict) or not tracker.get("follow_up_date"):
+            continue
+        actions.append(
+            {
+                "run_id": run.id,
+                "role": (run.job.title if run.job else "") or "Untitled role",
+                "company": (run.job.company if run.job else "") or "Company not specified",
+                "follow_up_date": str(tracker.get("follow_up_date")),
+                "status": _tracker_status(run),
+            }
+        )
+    return sorted(actions, key=lambda item: item["follow_up_date"])[:6]

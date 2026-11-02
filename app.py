@@ -13,7 +13,6 @@ import source.ui.styles as styles
 
 
 inject_global_styles = styles.inject_global_styles
-APP_BUILD = "gemini-selector-v3"
 
 
 def initialize_session_state():
@@ -106,7 +105,6 @@ def render_ai_settings():
         )
 
         st.caption("Use a temporary provider key for live testing and avoid uploading sensitive documents.")
-        st.caption(f"Build: {APP_BUILD}")
         st.markdown('<div class="sidebar-demo-spacer"></div>', unsafe_allow_html=True)
 
         if st.button("Try Demo", type="primary", width="stretch", key="try_demo_sidebar"):

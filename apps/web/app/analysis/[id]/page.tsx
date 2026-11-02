@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import { ErrorPanel } from "../../../components/ErrorPanel";
+import { FitReviewNav } from "../../../components/FitReviewNav";
 import { ScoreCard } from "../../../components/ScoreCard";
 import { TrackerAction } from "../../../components/TrackerAction";
 import { getAnalysis } from "../../../lib/api";
@@ -24,22 +25,46 @@ function statusClass(value: unknown): string {
   return "warn";
 }
 
-function buildSkillsEvidenceRows(matchedSkills: any[], atsKeywords: any[]): any[] {
+function evidenceKey(value: unknown): string {
+  const normalized = String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9+#/]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/ experience$/, "");
+
+  if (normalized === "rest apis" || normalized.includes("rest apis microservices")) {
+    return "rest apis";
+  }
+  if (normalized === "spark" || (normalized.includes("spark") && normalized.includes("pyspark"))) {
+    return "spark";
+  }
+  if (normalized === "sql" || normalized.includes("sql postgresql")) {
+    return "sql";
+  }
+  if (normalized === "ci/cd" || normalized.includes("docker ci/cd")) {
+    return "ci/cd";
+  }
+  return normalized;
+}
+
+function buildSkillsEvidenceRows(matchedSkills: any[], atsKeywords: any[], missingSkills: any[], unsupportedClaims: any[]): any[] {
   const rows = new Map<string, any>();
 
   matchedSkills.forEach((item) => {
     const skill = String(item.skill ?? "Matched skill");
-    rows.set(skill.toLowerCase(), {
+    rows.set(evidenceKey(skill), {
       skill,
       jdSignal: item.jd_signal ?? item.requirement ?? "Matched requirement",
       resumeEvidence: item.resume_evidence ?? "Resume evidence not returned.",
       status: item.evidence_status ?? item.status ?? "Supported",
+      action: item.action ?? item.recommendation ?? "Keep this evidence visible in the resume.",
     });
   });
 
   atsKeywords.forEach((item) => {
     const skill = String(item.keyword ?? "Keyword");
-    const key = skill.toLowerCase();
+    const key = evidenceKey(skill);
     const existing = rows.get(key);
 
     rows.set(key, {
@@ -47,14 +72,76 @@ function buildSkillsEvidenceRows(matchedSkills: any[], atsKeywords: any[]): any[
       jdSignal: existing?.jdSignal ?? item.jd_signal ?? item.keyword ?? "Keyword match",
       resumeEvidence: existing?.resumeEvidence ?? item.resume_evidence ?? "Not found in resume.",
       status: existing?.status ?? item.coverage_status ?? "Needs proof",
+      action: existing?.action ?? item.action ?? item.recommendation ?? "Add specific evidence if this skill is accurate.",
+    });
+  });
+
+  missingSkills.forEach((item) => {
+    const skill = String(item.skill ?? item.requirement ?? "Missing requirement");
+    const key = evidenceKey(skill);
+    if (!rows.has(key)) {
+      rows.set(key, {
+        skill,
+        jdSignal: item.importance ?? item.priority ?? "Required",
+        resumeEvidence: item.action ?? item.recommendation ?? "Not found in resume.",
+        status: "Missing",
+        action: item.action ?? item.recommendation ?? "Add evidence only if this experience is accurate.",
+      });
+    }
+  });
+
+  unsupportedClaims.forEach((item) => {
+    const skill = String(item.claim_or_skill ?? item.finding ?? "Claim to verify");
+    const key = evidenceKey(skill);
+    const existing = rows.get(key);
+    rows.set(key, {
+      skill: existing?.skill ?? skill,
+      jdSignal: existing?.jdSignal ?? "Verify against job requirement",
+      resumeEvidence: item.evidence ?? item.resume_evidence ?? existing?.resumeEvidence ?? "Not found in resume.",
+      status: "Needs verification",
+      action: item.action ?? item.recommendation ?? "Verify this claim before using it.",
     });
   });
 
   return Array.from(rows.values());
 }
 
-function driverPercent(value: unknown): number {
-  return Math.min(Math.abs(Number(value ?? 0)) * 4, 100);
+function buildWaterfallSteps(scoreDrivers: any[], finalScore: number) {
+  const contributions = scoreDrivers.slice(0, 6).map((item) => Number(item.contribution ?? 0));
+  const contributionTotal = contributions.reduce((total, value) => total + value, 0);
+  let runningScore = Math.max(0, Math.min(100, finalScore - contributionTotal));
+  const steps = [{
+    label: "Starting score",
+    evidence: "Baseline before the returned positive and negative match factors.",
+    contribution: runningScore,
+    before: 0,
+    after: runningScore,
+    tone: "base",
+  }];
+
+  scoreDrivers.slice(0, 6).forEach((item) => {
+    const contribution = Number(item.contribution ?? 0);
+    const before = runningScore;
+    runningScore = Math.max(0, Math.min(100, runningScore + contribution));
+    steps.push({
+      label: item.driver ?? "Score driver",
+      evidence: item.evidence ?? "Evidence not returned.",
+      contribution,
+      before,
+      after: runningScore,
+      tone: contribution >= 0 ? "positive" : "negative",
+    });
+  });
+
+  steps.push({
+    label: "Final match score",
+    evidence: "The final score returned for this fit review.",
+    contribution: finalScore,
+    before: 0,
+    after: finalScore,
+    tone: "final",
+  });
+  return steps;
 }
 
 function coveragePercentFromStatus(value: unknown): number {
@@ -187,31 +274,49 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
     const scoreDrivers = asList(analysis.score_drivers);
     const matchedSkills = asList(skills.matched_skills);
     const atsKeywords = asList(analysis.ats_keyword_coverage);
-    const skillsEvidenceRows = buildSkillsEvidenceRows(matchedSkills, atsKeywords);
+    const missingSkills = asList(skills.missing_skills);
     const requirementCategories = asList(requirements.requirement_categories);
     const atsFormattingChecks = asList(analysis.ats_formatting_checks);
     const tracker = analysis.tracker ?? {};
     const unsupportedClaims = asList(analysis.hallucination_guardrail);
+    const skillsEvidenceRows = buildSkillsEvidenceRows(matchedSkills, atsKeywords, missingSkills, unsupportedClaims);
+    const evidenceCounts = skillsEvidenceRows.reduce((counts, item) => {
+      const status = statusClass(item.status);
+      if (status === "good") counts.supported += 1;
+      else if (status === "bad") counts.missing += 1;
+      else counts.partial += 1;
+      return counts;
+    }, { supported: 0, partial: 0, missing: 0 });
+    const evidenceTotal = Math.max(1, skillsEvidenceRows.length);
     const allFixes = asList(analysis.fix_impact_matrix);
     const topFixes = allFixes.slice(0, 3);
     const additionalFixes = allFixes.slice(3, 6);
+    const overallScore = Number(scores.overall_match_score ?? run.overall_score ?? 0);
+    const waterfallSteps = buildWaterfallSteps(scoreDrivers, overallScore);
     const readiness = buildApplyReadiness({
       atsFormattingChecks,
       requirementCategories,
       unsupportedClaims,
       topFixes,
       recommendation: summary.apply_recommendation,
-      overallScore: Number(scores.overall_match_score ?? run.overall_score ?? 0),
+      overallScore,
     });
 
     return (
       <section className="section">
-        <div className="section-label">Fit review</div>
-        <h1>{summary.headline || "Resume analysis"}</h1>
-        <p className="muted">{summary.short_explanation || "A practical resume-to-role review with evidence, risks, and next steps."}</p>
+        <div className="page-heading-row" id="overview">
+          <div>
+            <div className="section-label">Fit review</div>
+            <h1>{summary.headline || "Resume analysis"}</h1>
+            <p className="muted">{summary.short_explanation || "A practical resume-to-role review with evidence, risks, and next steps."}</p>
+          </div>
+          <Link className="button" href={`/tailor/${run.run_id}`}>Tailor resume</Link>
+        </div>
 
-        <div className="section grid five">
-          <ScoreCard label="Overall match" value={`${scores.overall_match_score ?? run.overall_score}/100`} detail={scores.match_label} />
+        <FitReviewNav />
+
+        <div className="section analysis-score-grid">
+          <ScoreCard featured label="Overall match" value={`${overallScore}/100`} detail={scores.match_label} />
           <ScoreCard label="Technical match" value={`${scores.technical_match_score ?? 0}/100`} />
           <ScoreCard label="Evidence coverage" value={`${scores.resume_evidence_score ?? 0}/100`} />
           <ScoreCard label="Experience fit" value={`${scores.experience_match_score ?? 0}/100`} />
@@ -259,7 +364,7 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
           </div>
         </div>
 
-        <div className="section grid three">
+        <div className="section grid four job-context-grid">
           <div className="card">
             <span className="section-label">Role</span>
             <h3>{job.job_title || "Target role"}</h3>
@@ -282,36 +387,36 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
           </div>
         </div>
 
-        <div className="section grid two">
-          <div className="card">
-            <h3>Score drivers</h3>
-            <div className="bar-list">
-              {scoreDrivers.slice(0, 6).map((item, index) => {
-                const contribution = Number(item.contribution ?? 0);
+        <div className="section grid two" id="requirements">
+          <div className="card waterfall-card">
+            <div className="card-heading-row">
+              <div><span className="section-label">Score explanation</span><h3>Contribution waterfall</h3></div>
+              <span className="muted">0–100 scale</span>
+            </div>
+            <div className="waterfall-list" aria-label="Score contribution waterfall">
+              {waterfallSteps.map((step, index) => {
+                const start = Math.min(step.before, step.after);
+                const width = Math.max(1.5, Math.abs(step.after - step.before));
                 return (
-                  <div className="driver-row" key={index}>
-                    <div className="driver-copy">
-                      <strong>{item.driver ?? "Score driver"}</strong>
-                      <span className="muted">{item.evidence ?? "Evidence not returned."}</span>
+                  <div className="waterfall-row" key={`${step.label}-${index}`}>
+                    <div className="waterfall-copy">
+                      <strong>{step.label}</strong>
+                      <span>{step.evidence}</span>
                     </div>
-                    <div className="driver-impact">
-                      <span className={`status ${contribution >= 0 ? "good" : "bad"}`}>
-                        {contribution >= 0 ? "+" : ""}
-                        {contribution}
-                      </span>
-                      <span
-                        className={`driver-bar ${contribution >= 0 ? "positive" : "negative"}`}
-                        style={{ "--value": `${driverPercent(contribution)}%` } as CSSProperties}
-                      />
+                    <div className="waterfall-plot" aria-hidden="true">
+                      <span className={`waterfall-bar ${step.tone}`} style={{ "--start": `${start}%`, "--width": `${width}%` } as CSSProperties} />
                     </div>
+                    <span className={`waterfall-value ${step.tone === "negative" ? "negative-text" : step.tone === "positive" ? "positive-text" : ""}`}>
+                      {step.tone === "positive" && step.contribution >= 0 ? "+" : ""}{step.contribution}
+                    </span>
                   </div>
                 );
               })}
-              {!scoreDrivers.length ? <p className="muted">Score drivers were not returned for this run.</p> : null}
             </div>
           </div>
 
-          <div className="card">
+          <div className="card requirement-card">
+            <span className="section-label">Job requirements</span>
             <h3>Requirement coverage</h3>
             <div className="coverage-list">
               {requirementCategories.slice(0, 6).map((item, index) => {
@@ -332,85 +437,79 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
           </div>
         </div>
 
-        <div className="section card">
-          <h3>Skills evidence</h3>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Skill</th>
-                <th>JD signal</th>
-                <th>Resume evidence</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {skillsEvidenceRows.slice(0, 10).map((item, index) => (
-                <tr key={`${item.skill ?? "skill"}-${index}`}>
-                  <td>{item.skill}</td>
-                  <td className="muted">{item.jdSignal}</td>
-                  <td className="muted">{item.resumeEvidence}</td>
-                  <td>
-                    <span className={`status ${statusClass(item.status)}`}>
-                      {item.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              {!skillsEvidenceRows.length ? (
-                <tr>
-                  <td colSpan={4} className="muted">No skills evidence reported.</td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
+        <details className="section card analysis-disclosure" id="evidence">
+          <summary>
+            <span><span className="section-label">Evidence</span><strong>Skills and claim support</strong></span>
+            <span className="muted">{skillsEvidenceRows.length} signals reviewed</span>
+          </summary>
+          <div className="disclosure-body">
+            <div className="evidence-summary">
+              <div>
+                <h3>Evidence coverage</h3>
+                <p className="muted">How strongly the resume supports the skills and claims used in this review.</p>
+              </div>
+              <div className="evidence-legend">
+                <span><i className="evidence-supported" />Supported <strong>{evidenceCounts.supported}</strong></span>
+                <span><i className="evidence-partial" />Needs proof <strong>{evidenceCounts.partial}</strong></span>
+                <span><i className="evidence-missing" />Missing <strong>{evidenceCounts.missing}</strong></span>
+              </div>
+            </div>
+            <div className="evidence-distribution" aria-label={`${evidenceCounts.supported} supported, ${evidenceCounts.partial} needing proof, ${evidenceCounts.missing} missing`}>
+              <span className="evidence-supported" style={{ width: `${(evidenceCounts.supported / evidenceTotal) * 100}%` }} />
+              <span className="evidence-partial" style={{ width: `${(evidenceCounts.partial / evidenceTotal) * 100}%` }} />
+              <span className="evidence-missing" style={{ width: `${(evidenceCounts.missing / evidenceTotal) * 100}%` }} />
+            </div>
 
-        <div className="section grid two">
-          <div className="card">
-            <h3>Missing skills</h3>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Skill</th>
-                  <th>Importance</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {asList(skills.missing_skills).slice(0, 8).map((item, index) => (
-                  <tr key={`${item.skill ?? "skill"}-${index}`}>
-                    <td>{item.skill ?? item.requirement ?? "Missing requirement"}</td>
-                    <td>{item.importance ?? item.priority ?? "Important"}</td>
-                    <td>{item.action ?? item.recommendation ?? "Add evidence if true."}</td>
-                  </tr>
+            <div className="table-scroll">
+              <table className="table evidence-table">
+                <thead><tr><th>Skill or claim</th><th>JD signal</th><th>Resume evidence</th><th>Status</th><th>Next step</th></tr></thead>
+                <tbody>
+                  {skillsEvidenceRows.slice(0, 16).map((item, index) => (
+                    <tr key={`${item.skill ?? "skill"}-${index}`}>
+                      <td><strong>{item.skill}</strong></td>
+                      <td className="muted">{item.jdSignal}</td>
+                      <td className="muted">{item.resumeEvidence}</td>
+                      <td><span className={`status ${statusClass(item.status)}`}>{item.status}</span></td>
+                      <td>{item.action}</td>
+                    </tr>
+                  ))}
+                  {!skillsEvidenceRows.length ? <tr><td colSpan={5} className="muted">No skills evidence reported.</td></tr> : null}
+                </tbody>
+              </table>
+            </div>
+
+            <div className={`grid ${additionalFixes.length ? "two" : ""}`}>
+              <div className="subpanel">
+                <h3>Evidence findings</h3>
+                {asList(analysis.confidence_findings).slice(0, 5).map((item, index) => (
+                  <p key={index}>
+                    <span className={`status ${String(item.confidence).toLowerCase() === "high" ? "good" : "warn"}`}>{item.confidence ?? "needs review"}</span>{" "}
+                    <strong>{item.finding ?? "Finding"}</strong><br />
+                    <span className="muted">{item.resume_evidence ?? item.evidence ?? "Not found in resume."}</span>
+                  </p>
                 ))}
-                {!asList(skills.missing_skills).length ? (
-                  <tr>
-                    <td colSpan={3} className="muted">No missing skills reported.</td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
+                {!asList(analysis.confidence_findings).length ? <p className="muted">No additional evidence findings were returned.</p> : null}
+              </div>
+              {additionalFixes.length ? (
+                <div className="subpanel">
+                  <h3>Additional fixes</h3>
+                  {additionalFixes.map((item, index) => (
+                    <p key={index}><strong>{item.fix ?? item.recommendation ?? "Recommended fix"}</strong><br /><span className="muted">Impact: {item.impact ?? "Important"} · Effort: {item.effort ?? "Medium"}</span></p>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           </div>
-          <div className="card">
-            <h3>Unsupported claims</h3>
-            {unsupportedClaims.slice(0, 6).map((item, index) => (
-              <p key={index}>
-                <strong>{item.claim_or_skill ?? item.finding ?? "Claim to verify"}</strong>
-                <br />
-                <span className="muted">{item.evidence ?? item.resume_evidence ?? "Not found in resume."}</span>
-              </p>
-            ))}
-            {!unsupportedClaims.length ? <p className="muted">No unsupported claims reported.</p> : null}
-          </div>
-        </div>
+        </details>
 
-        <div className="section card">
-          <h3>ATS formatting checks</h3>
-          <p className="muted">
-            Non-LLM checks for common parsing and screening issues. These are heuristics, so review the original file before applying.
-          </p>
-          <table className="table">
+        <details className="section card analysis-disclosure" id="ats-checks">
+          <summary>
+            <span><span className="section-label">Resume parsing</span><strong>ATS formatting checks</strong></span>
+            <span className="muted">{atsFormattingChecks.length} checks</span>
+          </summary>
+          <div className="disclosure-body">
+            <p className="muted">Non-LLM checks for common parsing and screening issues. These are heuristics, so review the original file before applying.</p>
+            <div className="table-scroll"><table className="table">
             <thead>
               <tr>
                 <th>Check</th>
@@ -442,40 +541,11 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
                 </tr>
               ) : null}
             </tbody>
-          </table>
-        </div>
-
-        <div className="section grid two">
-          <div className="card">
-            <h3>What else to fix before applying</h3>
-            {additionalFixes.map((item, index) => (
-              <p key={index}>
-                <strong>{item.fix ?? item.recommendation ?? "Recommended fix"}</strong>
-                <br />
-                <span className="muted">
-                  Impact: {item.impact ?? "Important"} · Effort: {item.effort ?? "Medium"}
-                </span>
-              </p>
-            ))}
-            {!additionalFixes.length ? <p className="muted">The highest-impact fixes are summarized in Apply Readiness.</p> : null}
+            </table></div>
           </div>
-          <div className="card">
-            <h3>Evidence findings</h3>
-            {asList(analysis.confidence_findings).slice(0, 5).map((item, index) => (
-              <p key={index}>
-                <span className={`status ${String(item.confidence).toLowerCase() === "high" ? "good" : "warn"}`}>
-                  {item.confidence ?? "needs review"}
-                </span>{" "}
-                <strong>{item.finding ?? "Finding"}</strong>
-                <br />
-                <span className="muted">{item.resume_evidence ?? item.evidence ?? "Not found in resume."}</span>
-              </p>
-            ))}
-            {!asList(analysis.confidence_findings).length ? <p className="muted">Confidence findings will appear after a completed analysis.</p> : null}
-          </div>
-        </div>
+        </details>
 
-        <div className="section">
+        <div className="section" id="actions">
           <div className="card action-card">
             <div>
               <span className="section-label">Job tracker</span>

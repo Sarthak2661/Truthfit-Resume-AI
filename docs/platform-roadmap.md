@@ -10,6 +10,16 @@ TruthFit v1 is a public Streamlit app with resume/JD upload, privacy-aware redac
 
 Keep this version deployable while the v2 platform is built.
 
+## Security Hardening: Phase 0 and Phase 1
+
+Status: implemented.
+
+Phase 0 established the production boundary: explicit API configuration, validated CORS origins, recoverable frontend failures, and removal of development-only labels from public UI.
+
+Phase 1 added Supabase email authentication and ownership enforcement. FastAPI verifies access tokens, maps the JWT subject to `users.auth_subject`, protects product workflows, scopes repository reads and writes by `user_id`, and returns `404` for cross-account record IDs. Automated tests cover missing authentication and account isolation.
+
+Remaining security work belongs to later production phases: rate limiting, controlled server-side provider keys, encrypted retained originals, retention/deletion workflows, and security monitoring.
+
 ## Phase 1: API Boundary
 
 Status: implemented as the first backend slice.
@@ -39,7 +49,7 @@ Remaining follow-up:
 
 ## Phase 2: Persistence
 
-Status: database foundation implemented as SQLAlchemy models, repositories, Alembic migration, seed script, and SQLite API integration tests. User-facing history and tracker migration remain pending.
+Status: implemented with SQLAlchemy models, Alembic migrations, authenticated ownership, database-backed history, and tracker workflows.
 
 The API supports PostgreSQL configuration and a local SQLite fallback.
 
@@ -54,7 +64,7 @@ Core tables:
 
 Progress against acceptance criteria:
 
-- Completed analyses can be retrieved by run ID; saved-job browsing and user-facing history remain pending.
+- Completed analyses, saved jobs, and dashboard history are scoped to the authenticated user.
 - Evidence records are stored separately and queryable through the database; no evidence-listing endpoint exists yet.
 - The Streamlit tracker still depends on local JSON files; migrating it remains pending.
 
@@ -62,7 +72,7 @@ Current implementation note:
 
 - The backend supports PostgreSQL through `DATABASE_URL`.
 - Local development and tests use SQLite as a lightweight fallback.
-- Authentication and real user sessions are still planned; until then, API requests can pass `user_email`.
+- Supabase sessions are verified by FastAPI and mapped through `users.auth_subject`; client payloads cannot select an owner.
 
 ## Phase 3: Product Frontend
 
@@ -84,12 +94,13 @@ Current implementation:
 - Core routes are implemented: `/`, `/dashboard`, `/resumes`, `/jobs`, `/analysis/[id]`, `/tailor/[id]`, and `/settings/providers`.
 - The frontend calls the FastAPI backend through `NEXT_PUBLIC_TRUTHFIT_API_URL`.
 - Resume parsing, job parsing, analysis run creation, saved analysis retrieval, tailoring, provider settings, dashboard metrics, and error/loading states are covered in the UI.
+- Supabase sign-up, sign-in, sign-out, callback handling, protected navigation, and authenticated API requests are implemented.
+- The dashboard emphasizes application progress, score history, recurring gaps, follow-ups, and resume-version comparisons; the tracker supports inline status, priority, dates, filtering, sorting, and notes.
 - CI typechecks and builds the web app.
 
 Remaining follow-up:
 
-- Add authenticated sessions once the auth model is decided.
-- Add richer charts after enough real persisted analysis data exists.
+- Add richer aggregate charts after enough real persisted analysis data exists.
 - Decide whether to retire Streamlit or keep it as a simple public demo.
 
 ## Phase 4: LLM Gateway and Agent Workflow

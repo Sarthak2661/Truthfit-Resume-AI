@@ -14,6 +14,17 @@ The repository currently contains two interfaces:
 - **Streamlit v1** is the deployed portfolio demo with no-API sample data, chat, PDF export, and a local job tracker.
 - **Next.js + FastAPI** is the newer product interface with combined resume/JD review, persisted analyses, Apply Readiness, inline tailoring, and an API-backed Kanban tracker. It currently runs locally and is not yet publicly deployed.
 
+## Current Product Status
+
+The first two security and reliability phases of the Next.js/FastAPI product path are complete:
+
+| Phase | Status | Delivered |
+| --- | --- | --- |
+| Phase 0: containment and reliability | Complete | Production API URL validation, environment-driven CORS, recoverable client errors, removal of public development labels, and fail-fast production configuration. |
+| Phase 1: authentication and ownership | Complete | Supabase email authentication, JWT verification in FastAPI, protected product routes, authenticated user mapping, user-scoped repositories, cross-account `404` responses, and ownership isolation tests. |
+
+Supabase stores login identities in its managed `auth.users` table, visible under **Authentication > Users**. TruthFit stores its application user record and owned analyses in the database selected by `DATABASE_URL`. A local `DATABASE_URL` therefore keeps application tables in local PostgreSQL even though authentication is handled by Supabase.
+
 ## Streamlit v1 Screenshots
 
 These screenshots show the currently deployed Streamlit demo. Updated Next.js product screenshots will replace this section when the new frontend is publicly deployed.
@@ -78,6 +89,7 @@ For the detailed current architecture, target v2 architecture, migration plan, a
 - Review Apply Readiness, score drivers, requirement coverage, missing proof, and unsupported claims.
 - Accept, edit, reject, and copy evidence-grounded bullet rewrites in the Next.js tailoring workflow.
 - Save completed analyses to an API-backed Kanban tracker with role, company, location, score, notes, status, and a link back to the review.
+- Create an account or sign in with Supabase Auth; dashboard, analysis, tailoring, and tracker records are isolated by the verified account identity.
 - Use a no-API sample report so reviewers can explore the product without adding an API key.
 
 Safe demo inputs are included in [`samples/sample_resume.txt`](samples/sample_resume.txt) and [`samples/sample_job_description.txt`](samples/sample_job_description.txt). They are fictional and safe to use when testing the deployed app.
@@ -259,6 +271,24 @@ The Streamlit app opens at `http://127.0.0.1:8501`.
 
 ### Next.js + FastAPI Product Interface
 
+Create a Supabase project and enable Email authentication. Add both `http://127.0.0.1:3000/auth/callback` and `http://localhost:3000/auth/callback` to the allowed redirect URLs in Supabase. Copy the project URL and publishable key into the API and frontend environments. For public account creation, create an hCaptcha site, add its site key to the frontend, and configure its secret under Supabase Authentication > Bot and Abuse Protection.
+
+Root `.env`:
+
+```env
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_JWT_AUDIENCE=authenticated
+```
+
+`apps/web/.env.local`:
+
+```env
+NEXT_PUBLIC_TRUTHFIT_API_URL=http://127.0.0.1:8000
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_publishable_key
+NEXT_PUBLIC_HCAPTCHA_SITE_KEY=your_hcaptcha_site_key
+```
+
 Configure persistence and apply the database migration. PostgreSQL is recommended for deployment; without `DATABASE_URL`, development uses SQLite at `.truthfit/truthfit.db`.
 
 ```powershell
@@ -266,10 +296,12 @@ $env:DATABASE_URL = "postgresql+psycopg://user:password@localhost:5432/truthfit"
 alembic upgrade head
 ```
 
+Alembic reads the repository root `.env`; an explicitly exported `DATABASE_URL` takes precedence. If the URL points to `localhost`, tables are created in local PostgreSQL. To keep application records in Supabase Postgres, use the Supabase database connection string instead.
+
 Start the API:
 
 ```powershell
-py -3.12 -m uvicorn apps.api.app.main:app --reload
+py -3.12 -m uvicorn apps.api.app.main:app --reload --env-file .env
 ```
 
 The Swagger UI is available at `http://127.0.0.1:8000/docs`. To seed safe sample records:
@@ -286,11 +318,16 @@ npm ci
 npm run dev
 ```
 
-The frontend opens at `http://127.0.0.1:3000` and calls `http://127.0.0.1:8000` by default. For another API host, create `apps/web/.env.local` with:
+The frontend opens at `http://127.0.0.1:3000`. Sign in or create an account before opening dashboard, analysis, tailoring, or tracker routes. Production builds require explicit API and Supabase configuration.
 
 ```env
 NEXT_PUBLIC_TRUTHFIT_API_URL=https://your-api-host
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_publishable_key
+NEXT_PUBLIC_HCAPTCHA_SITE_KEY=your_hcaptcha_site_key
 ```
+
+Production API deployments must also set `TRUTHFIT_ENV=production`, `SUPABASE_URL`, and a comma-separated `TRUTHFIT_ALLOWED_ORIGINS` value. FastAPI verifies Supabase JWT signatures and scopes every analysis, dashboard, and tracker query to the authenticated subject.
 
 Runtime and development dependencies are pinned for repeatable local and cloud builds. See [database setup](docs/api.md#database) for additional PostgreSQL and migration guidance.
 
@@ -313,7 +350,7 @@ The test suite covers:
 - privacy-aware redaction
 - resume proof map generation
 - resume evidence scoring
-- API route contracts, database health, persisted analysis retrieval, dashboard summaries, tracker compatibility, and mocked provider responses
+- API authentication, cross-user ownership isolation, route contracts, database health, persisted analysis retrieval, dashboard summaries, tracker compatibility, and mocked provider responses
 
 Validate the Next.js frontend separately:
 
@@ -323,7 +360,7 @@ npm run typecheck
 npm run build
 ```
 
-The current repository passes 49 Python tests, TypeScript validation, and a production Next.js build.
+The current repository contains 70 Python tests, TypeScript validation, and a production Next.js build.
 
 ### Continuous Integration
 
@@ -357,19 +394,18 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for deployment steps.
 - PDF parsing can be messy for resumes with columns, tables, images, or unusual layouts.
 - Privacy redaction is heuristic and should not be treated as legal or compliance-grade anonymization.
 - Live analysis still sends redacted resume/JD text to the selected provider.
-- The API has no authentication or record-ownership checks; analysis IDs must be treated as sensitive.
 - Inline tailoring decisions are not persisted or exported as a new DOCX/PDF resume.
 - Regional targeting is an initial prompt-based mode, not a validated market-specific rules engine.
-- The Streamlit tracker is local; the Next.js tracker is database-backed but not yet multi-user safe.
+- The Streamlit tracker is local; the Next.js tracker is authenticated and database-backed.
 - The Next.js frontend is not yet publicly deployed.
 
 ## Roadmap
 
 TruthFit now includes the Streamlit v1 baseline, FastAPI services, SQLAlchemy persistence, and the first Next.js product interface. The next work is focused on making that product path safer, more persistent, and easier to deploy. The detailed phased plan is tracked in [docs/platform-roadmap.md](docs/platform-roadmap.md).
 
-### 1. Authentication and User-Scoped History
+### 1. Security and User-Scoped History
 
-Add login, authenticated sessions, ownership checks, and user-scoped analysis and tracker queries. Firebase Auth is the faster product route; a SQL-backed session model offers more control over roles, subscriptions, and audit history.
+Phase 0 reliability controls and Phase 1 ownership enforcement are implemented. Supabase Auth, FastAPI JWT verification, authenticated sessions, protected routes, and user-scoped analysis and tracker queries are covered by tests. The next security work is rate limiting, server-side provider-key controls, retention, deletion, and encrypted storage for any retained original resume text.
 
 ### 2. Persistent Resume Versions and Export
 
@@ -401,7 +437,7 @@ Containerize the Next.js, FastAPI, and PostgreSQL product path. Add configurable
 
 ## Privacy Note
 
-TruthFit applies heuristic redaction before resume preview, proof mapping, and live analysis. Streamlit does not save uploaded resume and job-description files; successful API analyses persist original and redacted resume text and JD text in the configured database. Resume/JD text may still be sent to the selected AI provider during live analysis. The API has no authentication, ownership checks, or automatic retention/deletion controls yet.
+TruthFit applies heuristic redaction before resume preview, proof mapping, and live analysis. Streamlit does not save uploaded resume and job-description files; successful API analyses persist original and redacted resume text and JD text in the configured database. Resume/JD text may still be sent to the selected AI provider during live analysis. The API enforces authenticated record ownership, but automatic retention, deletion, and encrypted original-text storage are not implemented yet.
 
 ## Git Hygiene
 

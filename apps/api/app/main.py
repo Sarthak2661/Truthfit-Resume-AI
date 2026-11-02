@@ -6,7 +6,9 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from apps.api.app.routes import router
+from apps.api.app.config import allowed_cors_origins
 from apps.api.app.db.database import init_db
+from apps.api.app.errors import ResourceNotFoundError
 from apps.api.app.schemas import ErrorResponse
 from source.services.observability import log_event, log_warning, new_request_id
 
@@ -31,10 +33,7 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-        ],
+        allow_origins=allowed_cors_origins(),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -68,6 +67,15 @@ def create_app() -> FastAPI:
         return JSONResponse(
             status_code=422,
             content=ErrorResponse(request_id=request_id, detail="Request validation failed.").model_dump(),
+            headers={"x-request-id": request_id},
+        )
+
+    @app.exception_handler(ResourceNotFoundError)
+    async def not_found_error_handler(request: Request, exc: ResourceNotFoundError):
+        request_id = getattr(request.state, "request_id", new_request_id())
+        return JSONResponse(
+            status_code=404,
+            content=ErrorResponse(request_id=request_id, detail=str(exc)).model_dump(),
             headers={"x-request-id": request_id},
         )
 

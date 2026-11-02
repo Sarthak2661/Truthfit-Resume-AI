@@ -1,6 +1,6 @@
 # FastAPI Backend
 
-The Phase 1 backend lives in `apps/api` and can run independently from Streamlit.
+The API backend lives in `apps/api` and can run independently from Streamlit. Phase 0 production-configuration safeguards and Phase 1 Supabase authentication and record ownership are implemented.
 
 ## Run Locally
 
@@ -26,6 +26,8 @@ OpenAPI and Swagger UI are available at:
 | `POST` | `/tailor` | Return resume tailoring sections from an existing analysis or a fresh run. |
 | `GET` | `/providers` | List supported LLM providers, models, and defaults. |
 | `GET` | `/dashboard/summary` | Return recent analyses, average score, common gaps, provider usage, and failed-run counts. |
+| `GET` | `/tracker` | List the authenticated account's tracked opportunities. |
+| `POST` | `/tracker/{run_id}` | Save status, priority, dates, and notes for an owned analysis. |
 
 ## Service Boundaries
 
@@ -40,6 +42,8 @@ Routes call service modules instead of embedding business logic directly:
 
 The Next.js frontend lives in `apps/web` and calls this backend through `NEXT_PUBLIC_TRUTHFIT_API_URL`.
 
+Development defaults to `http://127.0.0.1:8000`. Production builds require an explicit absolute HTTP(S) URL and fail when it is missing or invalid.
+
 ```bash
 cd apps/web
 npm install
@@ -48,10 +52,35 @@ npm run dev
 
 Open `http://127.0.0.1:3000` after the FastAPI backend is running.
 
+## Runtime Configuration
+
+Local development permits the Next.js origins automatically. Production requires explicit origins:
+
+```bash
+TRUTHFIT_ENV=production
+TRUTHFIT_ALLOWED_ORIGINS=https://app.example.com
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_JWT_AUDIENCE=authenticated
+NEXT_PUBLIC_TRUTHFIT_API_URL=https://api.example.com
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_publishable_key
+```
+
+`TRUTHFIT_ALLOWED_ORIGINS` accepts a comma-separated list of complete HTTP(S) origins. Wildcards, paths, query strings, and malformed origins are rejected. All resume, job, analysis, tailoring, dashboard, and tracker routes require a Supabase access token. `/health` and `/providers` remain public.
+
+## Authentication and ownership
+
+- The Next.js client signs users in through Supabase Auth.
+- FastAPI verifies the Supabase JWT signature, issuer, audience, expiry, and `sub` claim.
+- The verified `sub` maps to `users.auth_subject`; request payloads cannot select an owner.
+- Resume parsing, JD parsing, analysis, history, dashboard, tailoring, and tracker routes require authentication.
+- Repository reads and writes include the resolved application `user_id`. A valid record ID owned by another account returns `404`.
+- Supabase login identities live in the managed `auth.users` table. TruthFit's `users` table lives in the database selected by `DATABASE_URL` and is created on the account's first protected API workflow.
+
 ## Current Limitations
 
 - The API persists users, resumes, jobs, analysis runs, evidence rows, and agent events through SQLAlchemy.
-- API authentication, rate limits, hosted key controls, and persistent user sessions are planned for later phases.
+- Rate limits, hosted key controls, retention, and account deletion are planned for later phases.
 - Live analysis still depends on the selected provider API key and provider availability.
 
 ## Database
@@ -76,9 +105,9 @@ Seed demo data:
 python scripts/seed_database.py
 ```
 
-The seed script uses synthetic data without a provider call and prints a run ID. Start the API and request `GET /analysis/{run_id}` with that ID to inspect the saved result. Each seed invocation creates a new resume, job, and analysis run.
+The seed script uses synthetic data without a provider call and prints a run ID. Set `TRUTHFIT_SEED_AUTH_SUBJECT` to your Supabase user ID if you want the seeded run to appear in your authenticated account. Each invocation creates a new resume, job, and analysis run.
 
-Export `DATABASE_URL` in the process environment for both Alembic and the API; Alembic does not load `.env` automatically. For PowerShell:
+Alembic loads the repository root `.env`. You can override it by exporting `DATABASE_URL` for both Alembic and the API. For PowerShell:
 
 ```powershell
 $env:DATABASE_URL = "postgresql+psycopg://user:password@localhost:5432/truthfit"
@@ -90,9 +119,9 @@ Run migrations on a fresh database before starting the API. API startup also cre
 
 ### Storage and access boundaries
 
-- Successful analysis runs persist the original and redacted resume text, filename, JD text, user email, result JSON, evidence rows, and completion event. Parse-only endpoints do not persist uploads.
+- Successful analysis runs persist the original and redacted resume text, filename, JD text, authenticated owner, result JSON, evidence rows, and completion event. Parse-only endpoints do not persist uploads.
 - Saved runs survive API restarts when the same database is retained. The Next.js dashboard uses `/analysis` and `/dashboard/summary` to show recent runs without rerunning the model.
-- `user_email` associates records with a user row but is not authentication. Omitted emails share the anonymous user. Retrieval currently has no ownership check, so keep this API in a trusted development environment until access controls are added.
+- The verified JWT `sub` claim maps to `users.auth_subject`. Client payloads cannot choose an email or owner. Run lookup, history, dashboard aggregation, and tracker updates all include `user_id`; cross-user IDs return `404`.
 - Failed analysis transactions roll back, including their failure event; durable failure history is not implemented.
 - The Streamlit app still uses session analysis state and its separate local JSON tracker. It does not use the API database.
 - Automated API tests use SQLite and mocked provider responses. They do not verify a live PostgreSQL deployment or live provider calls.

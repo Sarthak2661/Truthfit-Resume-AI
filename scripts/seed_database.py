@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import sys
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -18,7 +19,11 @@ def main() -> None:
     analysis = sample_analysis_result()
 
     with session_scope() as session:
-        user = repositories.get_or_create_user(session, "demo@truthfit.local")
+        user = repositories.get_or_create_user(
+            session,
+            auth_subject=os.getenv("TRUTHFIT_SEED_AUTH_SUBJECT", "seed:demo-user"),
+            email="demo@truthfit.local",
+        )
         resume = repositories.create_resume(
             session=session,
             user_id=user.id,

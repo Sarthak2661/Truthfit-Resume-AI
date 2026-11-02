@@ -1,4 +1,5 @@
 .env
+*.env.local
 .streamlit/secrets.toml
 .truthfit/
 venv/
@@ -13,6 +14,7 @@ tmp_streamlit_*.log
 tmp_streamlit_*.out.log
 tmp_streamlit_*.err.log
 .pytest_cache/
+.pytest_*/
 .mypy_cache/
 .ruff_cache/
 node_modules/

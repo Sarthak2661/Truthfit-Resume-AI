@@ -49,6 +49,7 @@ export default async function TailorPage({ params }: PageProps) {
 
         <div className="section card">
           <h3>What to fix first</h3>
+          <div className="table-scroll">
           <table className="table">
             <thead>
               <tr>
@@ -80,6 +81,7 @@ export default async function TailorPage({ params }: PageProps) {
               ) : null}
             </tbody>
           </table>
+          </div>
         </div>
 
         <div className="section card">

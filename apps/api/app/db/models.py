@@ -22,7 +22,8 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
-    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    auth_subject: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    email: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
     resumes: Mapped[list["Resume"]] = relationship(back_populates="user")

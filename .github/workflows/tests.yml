@@ -53,4 +53,8 @@ jobs:
 
       - name: Build web app
         working-directory: apps/web
+        env:
+          NEXT_PUBLIC_TRUTHFIT_API_URL: http://127.0.0.1:8000
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-publishable-key
         run: npm run build

@@ -1,5 +1,6 @@
 import streamlit as st
 
+from source.ai.errors import ProviderError, public_provider_message
 from source.ai.llm_client import generate_resume_analysis
 from source.loaders.jd_loader import extract_jd_text
 from source.loaders.resume_loader import extract_text_from_file
@@ -113,16 +114,20 @@ def show_analyze_page():
             st.error("Please upload or paste a job description.")
             return
 
-        with st.spinner("Building your TruthFit report..."):
-            result = generate_resume_analysis(
-                resume_text=st.session_state.resume_text,
-                job_description=st.session_state.jd_text,
-                include_cover_letter=st.session_state.include_cover_letter,
-                user_projects=st.session_state.user_projects,
-                provider=st.session_state.provider,
-                model=st.session_state.model,
-                api_key=st.session_state.api_key,
-            )
+        try:
+            with st.spinner("Building your TruthFit report..."):
+                result = generate_resume_analysis(
+                    resume_text=st.session_state.resume_text,
+                    job_description=st.session_state.jd_text,
+                    include_cover_letter=st.session_state.include_cover_letter,
+                    user_projects=st.session_state.user_projects,
+                    provider=st.session_state.provider,
+                    model=st.session_state.model,
+                    api_key=st.session_state.api_key,
+                )
+        except ProviderError as exc:
+            st.error(public_provider_message(exc))
+            return
 
         normalized_result = ui.normalize_analysis_result(result)
         normalized_result.setdefault("job_details", {})["job_link"] = st.session_state.job_link.strip()

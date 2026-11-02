@@ -236,7 +236,7 @@ def test_run_analysis_stores_completed_result(monkeypatch, tmp_path):
             "resume_text": "Sarthak Srivastava\nsarthak@example.com\nPython ETL SQL",
             "job_description": "Data Engineer with Python and SQL",
             "provider": "Gemini",
-            "model": "gemini-3.6-flash",
+            "model": "gemini-3.8-flash",
             "job_link": "https://example.com/job/123",
             "resume_file_name": "resume.txt",
             "job_title": "Data Engineer",
@@ -255,18 +255,19 @@ def test_run_analysis_stores_completed_result(monkeypatch, tmp_path):
     )
 
     body = response.json()
-    assert response.status_code == 200
+    assert response.status_code == 202
     assert body["run_id"]
-    assert body["analysis"]["scores"]["overall_match_score"] == 82
-    assert body["analysis"]["job_details"]["job_link"] == "https://example.com/job/123"
-    assert body["analysis"]["job_details"]["target_region"] == "India"
-    assert body["analysis"]["ats_formatting_checks"][0]["check"] == "File type"
+    assert body["status"] == "pending"
+    assert body["status_url"] == f"/analysis/{body['run_id']}"
 
     stored = api.get(f"/analysis/{body['run_id']}")
     assert stored.status_code == 200
     assert stored.json()["status"] == "completed"
     assert stored.json()["overall_score"] == 82
     assert stored.json()["analysis"]["match_summary"]["headline"] == "Strong evidence fit"
+    assert stored.json()["analysis"]["job_details"]["job_link"] == "https://example.com/job/123"
+    assert stored.json()["analysis"]["job_details"]["target_region"] == "India"
+    assert stored.json()["analysis"]["ats_formatting_checks"][0]["check"] == "File type"
 
     listed = api.get("/analysis")
     assert listed.status_code == 200
@@ -332,12 +333,12 @@ def test_region_context_is_sent_to_model(monkeypatch, tmp_path):
             "resume_text": "Python ETL SQL",
             "job_description": "Data Engineer with Snowflake",
             "provider": "Gemini",
-            "model": "gemini-3.6-flash",
+            "model": "gemini-3.8-flash",
             "target_region": "GCC",
         },
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 202
     assert "Target region: GCC" in captured["job_description"]
 
 
@@ -360,7 +361,7 @@ def test_tracker_ignores_invalid_legacy_job_link(monkeypatch, tmp_path):
             "resume_text": "Python ETL SQL",
             "job_description": "Data Engineer with Snowflake",
             "provider": "Gemini",
-            "model": "gemini-3.6-flash",
+            "model": "gemini-3.8-flash",
         },
     )
     run_id = created.json()["run_id"]
@@ -389,7 +390,7 @@ def test_completed_analysis_can_be_read_without_rerunning_model(monkeypatch, tmp
             "resume_text": "Python ETL SQL",
             "job_description": "Data Engineer with Python and SQL",
             "provider": "Gemini",
-            "model": "gemini-3.6-flash",
+            "model": "gemini-3.8-flash",
         },
     ).json()
 
@@ -398,6 +399,70 @@ def test_completed_analysis_can_be_read_without_rerunning_model(monkeypatch, tmp
     assert stored.status_code == 200
     assert calls["count"] == 1
     assert stored.json()["analysis"]["scores"]["overall_match_score"] == 82
+
+
+def test_provider_failure_is_persisted_as_failed_run(monkeypatch, tmp_path):
+    from apps.api.app.services import analysis_service
+    from apps.api.app.db.database import session_scope
+    from apps.api.app.db.models import AgentEvent
+    from sqlalchemy import select
+    from source.ai.errors import ProviderAuthenticationError
+
+    def reject_key(**_kwargs):
+        raise ProviderAuthenticationError(
+            "invalid API key",
+            provider="Gemini",
+            model="gemini-3.8-flash",
+        )
+
+    monkeypatch.setattr(analysis_service, "generate_resume_analysis", reject_key)
+    api = client(tmp_path)
+
+    created = api.post(
+        "/analysis/run",
+        json={
+            "resume_text": "Python ETL SQL",
+            "job_description": "Data Engineer with Python and SQL",
+            "provider": "Gemini",
+            "model": "gemini-3.8-flash",
+        },
+    )
+
+    assert created.status_code == 202
+    stored = api.get(f"/analysis/{created.json()['run_id']}")
+    assert stored.status_code == 200
+    assert stored.json()["status"] == "failed"
+    assert stored.json()["overall_score"] == 0
+    assert stored.json()["analysis"]["error"] == {
+        "type": "provider_authentication_error",
+        "message": "The provider rejected the API key. Check the key and try again.",
+    }
+    summary = api.get("/dashboard/summary").json()
+    assert summary["failed_runs"] == 1
+    assert summary["completed_runs"] == 0
+    with session_scope() as session:
+        events = list(
+            session.scalars(
+                select(AgentEvent).where(AgentEvent.analysis_run_id == created.json()["run_id"])
+            )
+        )
+    assert {event.status for event in events} == {"pending", "processing", "failed"}
+    failed_event = next(event for event in events if event.status == "failed")
+    assert failed_event.error_type == "provider_authentication_error"
+
+
+def test_unsupported_provider_model_is_rejected(tmp_path):
+    api = client(tmp_path)
+    response = api.post(
+        "/analysis/run",
+        json={
+            "resume_text": "Python ETL SQL",
+            "job_description": "Data Engineer with Python and SQL",
+            "provider": "Gemini",
+            "model": "gemini-2.0-flash",
+        },
+    )
+    assert response.status_code == 422
 
 
 def test_tailor_returns_resume_improvement_sections(tmp_path):
@@ -459,7 +524,7 @@ def test_cross_user_analysis_and_tracker_access_returns_404(monkeypatch, tmp_pat
             "company": "Northstar Analytics",
         },
     )
-    assert created.status_code == 200
+    assert created.status_code == 202
     run_id = created.json()["run_id"]
 
     api.app.dependency_overrides[get_current_user] = lambda: TEST_USER_B

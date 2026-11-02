@@ -11,8 +11,10 @@ flowchart LR
     links["Project notes<br>and links"] --> prompt["Prompt builder<br>source/ai/prompts.py"]
     web["Next.js frontend<br>apps/web"] --> api
     api["FastAPI routes<br>apps/api"] --> api_services["API services<br>parse / analysis / tailor"]
+    api_services --> queue["Analysis dispatcher<br>background task / Redis + RQ"]
+    queue --> worker["Analysis worker<br>pending / processing / completed / failed"]
     api_services --> loaders
-    api_services --> prompt
+    worker --> prompt
     loaders --> validation["Upload validation<br>size and page checks"]
     validation --> redaction["Privacy-aware redaction"]
     redaction --> prompt
@@ -21,7 +23,7 @@ flowchart LR
     schema --> services["Evidence, scoring, tracker,<br>report, observability services"]
     api_services --> db["SQLAlchemy persistence<br>users / resumes / jobs / runs / evidence / events"]
     db --> api_services
-    services --> api_services
+    services --> worker
     services --> pages["Streamlit pages<br>Home / Analyze / Dashboard / Chat / Tracker"]
 ```
 
@@ -29,8 +31,9 @@ flowchart LR
 
 - `app.py` owns Streamlit bootstrapping, session state, theme state, provider settings, and top-level page routing.
 - `apps/web/` contains the Phase 3 Next.js frontend for dashboard, resume, job, analysis, tailoring, and provider workflows.
-- `apps/api/` exposes the Phase 1 FastAPI backend with parse, analysis, tailoring, health, and provider endpoints.
+- `apps/api/` exposes the FastAPI backend with parse, queued analysis, tailoring, health, and provider endpoints.
 - `apps/api/app/db/` contains the Phase 2 SQLAlchemy models, database session management, and repositories.
+- `apps/api/app/analysis_queue.py` selects local background execution or Redis/RQ dispatch. Provider calls run outside database transactions, and each lifecycle transition is committed separately.
 - `source/pages/` contains user-facing page flows.
 - `source/loaders/` validates and extracts resume/JD text.
 - `source/ai/` builds prompts, calls LLM providers, validates structured output, and handles retry/fallback behavior.
@@ -47,7 +50,8 @@ flowchart TB
     web["Next.js frontend"] --> api["FastAPI backend"]
     api --> auth["Auth and sessions"]
     api --> db["PostgreSQL<br>users, resumes, jobs, analyses, evidence"]
-    api --> orchestrator["Agent orchestrator"]
+    api --> queue["Redis / RQ"]
+    queue --> orchestrator["Agent orchestrator"]
     orchestrator --> job_agent["Job requirement agent"]
     job_agent --> evidence_agent["Resume evidence agent"]
     evidence_agent --> gap_agent["Skill gap agent"]
@@ -57,7 +61,7 @@ flowchart TB
     gateway --> gemini["Gemini"]
     gateway --> openai["OpenAI"]
     gateway --> claude["Claude"]
-    gateway --> redis["Redis<br>cache, rate limits, task state"]
+    gateway --> redis["Redis<br>cache and rate limits"]
     api --> metrics["Prometheus metrics"]
     metrics --> grafana["Grafana dashboards"]
 ```
@@ -69,4 +73,4 @@ Do not replace the working Streamlit app all at once. Preserve v1 as the public 
 1. Keep the FastAPI backend and SQLAlchemy persistence passing tests while the Streamlit app remains the public demo.
 2. Replace the local SQLite development fallback with managed PostgreSQL in deployed API environments.
 3. Expand the Next.js frontend with authenticated history and richer product interactions.
-4. Add Redis, Docker, observability, Kubernetes, and Terraform after the core product behavior is proven.
+4. Keep Redis/RQ for provider work, then add Docker, metrics, Kubernetes, and Terraform after the core product behavior is proven.

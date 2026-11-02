@@ -20,6 +20,21 @@ Phase 1 added Supabase email authentication and ownership enforcement. FastAPI v
 
 Remaining security work belongs to later production phases: rate limiting, controlled server-side provider keys, encrypted retained originals, retention/deletion workflows, and security monitoring.
 
+## Reliability Phase 2: Analysis Lifecycle
+
+Status: implemented.
+
+Analysis creation is asynchronous and durable:
+
+- `POST /analysis/run` commits a `pending` run and returns `202 Accepted`.
+- A worker transitions the run through `processing` to `completed` or `failed`.
+- Provider calls run without an open database transaction.
+- Completion and failure events are committed independently.
+- The Next.js fit-review page polls the owned run until it reaches a terminal state.
+- Local development uses FastAPI background tasks; production selects Redis/RQ through environment configuration.
+
+This reliability sequence is separate from the original platform phases below, where Platform Phase 2 refers to PostgreSQL persistence.
+
 ## Phase 1: API Boundary
 
 Status: implemented as the first backend slice.
@@ -47,7 +62,7 @@ Remaining follow-up:
 - Add contract tests around external provider error payloads.
 - Decide whether Streamlit should eventually call the API or remain a separate v1 demo.
 
-## Phase 2: Persistence
+## Platform Phase 2: Persistence
 
 Status: implemented with SQLAlchemy models, Alembic migrations, authenticated ownership, database-backed history, and tracker workflows.
 
@@ -74,7 +89,7 @@ Current implementation note:
 - Local development and tests use SQLite as a lightweight fallback.
 - Supabase sessions are verified by FastAPI and mapped through `users.auth_subject`; client payloads cannot select an owner.
 
-## Phase 3: Product Frontend
+## Platform Phase 3: Product Frontend
 
 Status: implemented as a first Next.js frontend slice.
 
@@ -103,7 +118,7 @@ Remaining follow-up:
 - Add richer aggregate charts after enough real persisted analysis data exists.
 - Decide whether to retire Streamlit or keep it as a simple public demo.
 
-## Phase 4: LLM Gateway and Agent Workflow
+## Platform Phase 4: LLM Gateway and Agent Workflow
 
 Convert provider calls into a gateway with consistent routing, retries, fallback logging, timeouts, and model metadata.
 
@@ -117,12 +132,12 @@ Then split the analysis into deterministic agents:
 
 The first version should use a simple state machine before introducing a heavier orchestration framework.
 
-## Phase 5: Production Signals
+## Platform Phase 5: Production Signals
 
 Add production-style platform features once the product flow is stable:
 
 - Docker and Docker Compose
-- Redis for rate limits, cache, and task state
+- Redis for rate limits and cache, building on the existing RQ analysis queue
 - Prometheus metrics
 - Grafana dashboards
 - Kubernetes manifests

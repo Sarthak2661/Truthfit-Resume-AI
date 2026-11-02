@@ -17,7 +17,7 @@ def test_analysis_queries_are_scoped_to_authenticated_owner(tmp_path):
             resume.id,
             job.id,
             "Gemini",
-            "gemini-3.6-flash",
+            "gemini-3.8-flash",
         )
         repositories.complete_analysis_run(
             session,

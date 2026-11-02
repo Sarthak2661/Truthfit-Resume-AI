@@ -75,7 +75,7 @@ def create_analysis_run(
         user_id=user_id,
         resume_id=resume_id,
         job_id=job_id,
-        status="running",
+        status="pending",
         provider=provider,
         model=model,
     )
@@ -93,18 +93,36 @@ def complete_analysis_run(session: Session, run: AnalysisRun, analysis: dict) ->
     return run
 
 
-def fail_analysis_run(session: Session, run: AnalysisRun, error_type: str) -> AnalysisRun:
+def mark_analysis_run_processing(session: Session, run: AnalysisRun) -> AnalysisRun:
+    run.status = "processing"
+    session.flush()
+    return run
+
+
+def fail_analysis_run(
+    session: Session,
+    run: AnalysisRun,
+    error_type: str,
+    error_message: str,
+    latency_ms: int = 0,
+) -> AnalysisRun:
     run.status = "failed"
+    run.result_json = {"error": {"type": error_type, "message": error_message}}
     run.completed_at = datetime.now(timezone.utc)
     add_agent_event(
         session=session,
         analysis_run_id=run.id,
         agent_name="analysis",
         status="failed",
+        latency_ms=latency_ms,
         error_type=error_type,
     )
     session.flush()
     return run
+
+
+def get_analysis_run_internal(session: Session, run_id: str) -> AnalysisRun | None:
+    return session.scalar(select(AnalysisRun).where(AnalysisRun.id == run_id))
 
 
 def add_evidence_records(session: Session, analysis_run_id: str, analysis: dict) -> list[Evidence]:

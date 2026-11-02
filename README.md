@@ -16,12 +16,13 @@ The repository currently contains two interfaces:
 
 ## Current Product Status
 
-The first two security and reliability phases of the Next.js/FastAPI product path are complete:
+The first three security and reliability phases of the Next.js/FastAPI product path are complete:
 
 | Phase | Status | Delivered |
 | --- | --- | --- |
-| Phase 0: containment and reliability | Complete | Production API URL validation, environment-driven CORS, recoverable client errors, removal of public development labels, and fail-fast production configuration. |
-| Phase 1: authentication and ownership | Complete | Supabase email authentication, JWT verification in FastAPI, protected product routes, authenticated user mapping, user-scoped repositories, cross-account `404` responses, and ownership isolation tests. |
+| Reliability Phase 0: containment | Complete | Production API URL validation, environment-driven CORS, recoverable client errors, removal of public development labels, and fail-fast production configuration. |
+| Reliability Phase 1: authentication and ownership | Complete | Supabase email authentication, JWT verification in FastAPI, protected product routes, authenticated user mapping, user-scoped repositories, cross-account `404` responses, and ownership isolation tests. |
+| Reliability Phase 2: analysis lifecycle | Complete | Durable pending, processing, completed, and failed states; `202 Accepted` analysis requests; client polling; typed provider errors; independently committed failure events; and Redis/RQ production dispatch. |
 
 Supabase stores login identities in its managed `auth.users` table, visible under **Authentication > Users**. TruthFit stores its application user record and owned analyses in the database selected by `DATABASE_URL`. A local `DATABASE_URL` therefore keeps application tables in local PostgreSQL even though authentication is handled by Supabase.
 
@@ -65,6 +66,7 @@ The UI layers do not contain the core analysis logic. FastAPI routes call servic
 
 - `apps/web/` contains the Next.js product interface.
 - `apps/api/` contains FastAPI routes, application services, and SQLAlchemy repositories.
+- Local analysis work uses FastAPI background tasks. Production uses Redis and RQ so provider calls do not hold request or database transactions open.
 - `source/ai/` contains prompts, provider clients, retry/fallback behavior, and structured schemas.
 - `source/loaders/` contains upload validation and shared file extraction.
 - `source/services/` contains evidence, scoring, reporting, privacy, tracker, URL, and observability logic.
@@ -203,6 +205,8 @@ TruthFit logs privacy-safe operational events for local and cloud debugging:
 
 Logs intentionally exclude API keys, prompts, resume text, job descriptions, and uploaded file contents.
 
+Provider failures are stored as failed runs with a safe error category and message. They are not converted into successful zero-score analyses.
+
 ## Product Interfaces
 
 ### Next.js Product Interface
@@ -278,7 +282,12 @@ Root `.env`:
 ```env
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_JWT_AUDIENCE=authenticated
+TRUTHFIT_ANALYSIS_QUEUE=background
 ```
+
+For a public API deployment, use `TRUTHFIT_ANALYSIS_QUEUE=rq`, set `REDIS_URL`, and run an RQ worker. Keep Redis private and encrypted because queued jobs may contain a temporary bring-your-own provider key.
+
+The current provider catalog is returned by `GET /providers` and is the source of truth for both interfaces. Retired model IDs are rejected before an analysis is created.
 
 `apps/web/.env.local`:
 

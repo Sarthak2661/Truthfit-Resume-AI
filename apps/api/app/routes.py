@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile, status
 
 from apps.api.app.auth import CurrentUser, get_current_user
+from apps.api.app.analysis_queue import enqueue_analysis
 
 from apps.api.app.schemas import (
     AnalysisRunRequest,
@@ -25,7 +26,8 @@ from apps.api.app.services.analysis_service import (
     dashboard_summary,
     list_providers,
     list_tracked_jobs,
-    run_analysis,
+    create_pending_analysis,
+    fail_pending_analysis,
     tailor_resume,
     update_tracked_job,
 )
@@ -65,17 +67,37 @@ async def parse_job_endpoint(
     )
 
 
-@router.post("/analysis/run", response_model=AnalysisRunResponse, tags=["analysis"])
+@router.post(
+    "/analysis/run",
+    response_model=AnalysisRunResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["analysis"],
+)
 def run_analysis_endpoint(
     request: Request,
     payload: AnalysisRunRequest,
+    background_tasks: BackgroundTasks,
     current_user: CurrentUser = Depends(get_current_user),
 ) -> AnalysisRunResponse:
-    return run_analysis(
+    accepted = create_pending_analysis(
         payload=payload,
         request_id=request.state.request_id,
         current_user=current_user,
     )
+    try:
+        enqueue_analysis(
+            background_tasks=background_tasks,
+            run_id=accepted.run_id,
+            payload=payload.model_dump(),
+            request_id=request.state.request_id,
+        )
+    except Exception as exc:
+        fail_pending_analysis(
+            accepted.run_id,
+            "The analysis queue is unavailable. Retry the run later.",
+        )
+        raise HTTPException(status_code=503, detail="The analysis queue is unavailable.") from exc
+    return accepted
 
 
 @router.get("/analysis", response_model=AnalysisListResponse, tags=["analysis"])

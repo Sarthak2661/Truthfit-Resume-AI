@@ -1,4 +1,5 @@
 from collections import defaultdict
+from time import perf_counter
 
 from apps.api.app.db.database import session_scope
 from apps.api.app.db import repositories
@@ -20,16 +21,17 @@ from apps.api.app.schemas import (
     TrackerUpdateRequest,
 )
 from source.ai.llm_client import generate_resume_analysis
+from source.ai.errors import ProviderError, public_provider_message
 from source.ai.providers import PROVIDER_MODELS
 from source.ai.schemas import validate_analysis_result
 from source.services.evidence_score import add_resume_evidence_score
-from source.services.observability import timed_operation
+from source.services.observability import log_warning, timed_operation
 from source.services.resume_heatmap import redact_personal_details
 from source.services.url_utils import is_valid_http_url, normalize_http_url
 from source.ui.text_cleanup import normalize_analysis_result
 
 
-def run_analysis(
+def create_pending_analysis(
     payload: AnalysisRunRequest,
     request_id: str,
     current_user: CurrentUser,
@@ -68,36 +70,127 @@ def run_analysis(
             provider=provider,
             model=model,
         )
+        repositories.add_agent_event(
+            session=session,
+            analysis_run_id=run.id,
+            agent_name="analysis",
+            status="pending",
+        )
+        run_id = run.id
 
-        try:
-            with timed_operation("api_analysis_run", request_id=request_id, provider=provider, model=model):
-                analysis = generate_resume_analysis(
-                    resume_text=redacted_resume,
-                    job_description=_regional_job_context(payload.job_description, payload.target_region),
-                    include_cover_letter=payload.include_cover_letter,
-                    user_projects=payload.user_projects,
-                    provider=provider,
-                    model=model,
-                    api_key=payload.api_key,
-                )
-        except Exception as exc:
-            repositories.fail_analysis_run(session, run, exc.__class__.__name__)
-            raise
+    return AnalysisRunResponse(
+        request_id=request_id,
+        run_id=run_id,
+        status="pending",
+        status_url=f"/analysis/{run_id}",
+    )
+
+
+def process_analysis_run(run_id: str, payload_data: dict, request_id: str) -> None:
+    payload = AnalysisRunRequest.model_validate(payload_data)
+    started_at = perf_counter()
+
+    with session_scope() as session:
+        run = repositories.get_analysis_run_internal(session, run_id)
+        if run is None or run.status not in {"pending", "processing"}:
+            return
+        repositories.mark_analysis_run_processing(session, run)
+        repositories.add_agent_event(
+            session=session,
+            analysis_run_id=run.id,
+            agent_name="analysis",
+            status="processing",
+        )
+
+    try:
+        with timed_operation(
+            "api_analysis_run",
+            request_id=request_id,
+            provider=payload.provider,
+            model=payload.model or PROVIDER_MODELS[payload.provider][0],
+        ):
+            analysis = generate_resume_analysis(
+                resume_text=redact_personal_details(payload.resume_text),
+                job_description=_regional_job_context(payload.job_description, payload.target_region),
+                include_cover_letter=payload.include_cover_letter,
+                user_projects=payload.user_projects,
+                provider=payload.provider,
+                model=payload.model or PROVIDER_MODELS[payload.provider][0],
+                api_key=payload.api_key,
+            )
 
         normalized = _finalize_analysis(analysis, payload.job_link)
         if payload.resume_formatting_checks:
             normalized["ats_formatting_checks"] = payload.resume_formatting_checks
         normalized.setdefault("job_details", {})["target_region"] = payload.target_region
-        repositories.complete_analysis_run(session, run, normalized)
-        repositories.add_evidence_records(session, run.id, normalized)
-        repositories.add_agent_event(
-            session=session,
-            analysis_run_id=run.id,
-            agent_name="analysis",
-            status="completed",
+        latency_ms = int((perf_counter() - started_at) * 1000)
+
+        with session_scope() as session:
+            run = repositories.get_analysis_run_internal(session, run_id)
+            if run is None:
+                return
+            repositories.complete_analysis_run(session, run, normalized)
+            repositories.add_evidence_records(session, run.id, normalized)
+            repositories.add_agent_event(
+                session=session,
+                analysis_run_id=run.id,
+                agent_name="analysis",
+                status="completed",
+                latency_ms=latency_ms,
+            )
+    except ProviderError as exc:
+        _record_analysis_failure(run_id, exc.code, public_provider_message(exc), started_at)
+        log_warning(
+            "api_analysis_failed",
+            request_id=request_id,
+            run_id=run_id,
+            provider=payload.provider,
+            model=payload.model,
+            error_type=exc.code,
+        )
+    except Exception as exc:
+        _record_analysis_failure(
+            run_id,
+            "analysis_processing_error",
+            "TruthFit could not complete this analysis. Retry the run.",
+            started_at,
+        )
+        log_warning(
+            "api_analysis_failed",
+            request_id=request_id,
+            run_id=run_id,
+            provider=payload.provider,
+            model=payload.model,
+            error_type=exc.__class__.__name__,
         )
 
-        return AnalysisRunResponse(request_id=request_id, run_id=run.id, analysis=normalized)
+
+def _record_analysis_failure(
+    run_id: str,
+    error_type: str,
+    error_message: str,
+    started_at: float,
+) -> None:
+    with session_scope() as session:
+        run = repositories.get_analysis_run_internal(session, run_id)
+        if run is None:
+            return
+        repositories.fail_analysis_run(
+            session,
+            run,
+            error_type,
+            error_message,
+            latency_ms=int((perf_counter() - started_at) * 1000),
+        )
+
+
+def fail_pending_analysis(run_id: str, error_message: str) -> None:
+    _record_analysis_failure(
+        run_id=run_id,
+        error_type="analysis_queue_error",
+        error_message=error_message,
+        started_at=perf_counter(),
+    )
 
 
 def get_analysis_run(run_id: str, current_user: CurrentUser) -> StoredAnalysisResponse:
@@ -196,7 +289,19 @@ def tailor_resume(
             model=payload.model,
             api_key=payload.api_key,
         )
-        analysis = run_analysis(analysis_payload, request_id, current_user).analysis
+        analysis = generate_resume_analysis(
+            resume_text=redact_personal_details(analysis_payload.resume_text),
+            job_description=_regional_job_context(
+                analysis_payload.job_description,
+                analysis_payload.target_region,
+            ),
+            include_cover_letter=analysis_payload.include_cover_letter,
+            user_projects=analysis_payload.user_projects,
+            provider=analysis_payload.provider,
+            model=analysis_payload.model or PROVIDER_MODELS[analysis_payload.provider][0],
+            api_key=analysis_payload.api_key,
+        )
+        analysis = _finalize_analysis(analysis)
 
     return TailorResponse(
         request_id=request_id,

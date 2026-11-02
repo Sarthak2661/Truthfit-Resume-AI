@@ -1384,6 +1384,38 @@ html[data-theme="dark"] .success {
   }
 }
 
+.narrow-page {
+  margin-inline: auto;
+  max-width: 46rem;
+}
+
+.run-status-card {
+  margin-top: 4rem;
+  padding: clamp(1.5rem, 4vw, 3rem);
+}
+
+.run-status-progress {
+  background: var(--panel-soft);
+  border-radius: 999px;
+  height: 0.5rem;
+  margin: 1.5rem 0;
+  overflow: hidden;
+}
+
+.run-status-progress span {
+  animation: truthfit-progress 1.6s ease-in-out infinite;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  width: 42%;
+}
+
+@keyframes truthfit-progress {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(340%); }
+}
+
 @media (max-width: 1120px) and (min-width: 721px) {
   .kanban {
     grid-template-columns: repeat(2, minmax(0, 1fr));

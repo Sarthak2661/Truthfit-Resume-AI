@@ -7,7 +7,7 @@ The repo now contains two runnable interfaces:
 - Streamlit v1 at `app.py`
 - Next.js frontend at `apps/web`, backed by the FastAPI API at `apps/api`
 
-The product path includes the completed Phase 0 reliability controls and Phase 1 authentication/ownership controls. FastAPI validates Supabase access tokens and scopes persisted records to the verified account.
+The product path includes Phase 0 reliability controls, Phase 1 authentication/ownership, and the Phase 2 durable analysis lifecycle. FastAPI validates Supabase access tokens, scopes persisted records to the verified account, and moves production provider work to Redis/RQ.
 
 ## Streamlit Cloud
 
@@ -54,6 +54,8 @@ For PostgreSQL persistence, set:
 DATABASE_URL=postgresql+psycopg://user:password@host:5432/truthfit
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_JWT_AUDIENCE=authenticated
+TRUTHFIT_ANALYSIS_QUEUE=rq
+REDIS_URL=rediss://your-private-redis-host:6379/0
 ```
 
 Use the same database URL for both the migration process and API process. Alembic loads the repository root `.env`, while an explicitly exported environment variable takes precedence. See [database setup](docs/api.md#database) for PowerShell instructions and handling an existing database.
@@ -65,6 +67,14 @@ alembic upgrade head
 ```
 
 If `DATABASE_URL` is not set, the API uses local SQLite at `.truthfit/truthfit.db`, which is useful for development but not for production hosting.
+
+Run one or more analysis workers separately from the API web process:
+
+```bash
+rq worker --url "$REDIS_URL" truthfit-analysis
+```
+
+Local development can keep `TRUTHFIT_ANALYSIS_QUEUE=background` and does not need Redis. Public deployments should use private TLS Redis with authentication. The current BYOK flow places the temporary provider key in the queued job payload, so restrict Redis access and keep job/result retention short.
 
 ### Authentication data versus application data
 

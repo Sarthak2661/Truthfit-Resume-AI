@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from source.ai.providers import PROVIDER_MODELS
 
@@ -84,11 +84,22 @@ class AnalysisRunRequest(BaseModel):
             raise ValueError(f"Unsupported target region: {region}")
         return region
 
+    @model_validator(mode="after")
+    def validate_model_for_provider(self):
+        supported_models = PROVIDER_MODELS[self.provider]
+        if self.model and self.model not in supported_models:
+            raise ValueError(
+                f"Unsupported model for {self.provider}: {self.model}. "
+                f"Choose one of: {', '.join(supported_models)}"
+            )
+        return self
+
 
 class AnalysisRunResponse(BaseModel):
     request_id: str
     run_id: str
-    analysis: dict[str, Any]
+    status: str = "pending"
+    status_url: str
 
 
 class AnalysisListItem(BaseModel):
@@ -199,6 +210,18 @@ class TailorRequest(BaseModel):
     provider: str = "Gemini"
     model: str = ""
     api_key: str = ""
+
+    @model_validator(mode="after")
+    def validate_provider_model(self):
+        if self.provider not in PROVIDER_MODELS:
+            raise ValueError(f"Unsupported provider: {self.provider}")
+        supported_models = PROVIDER_MODELS[self.provider]
+        if self.model and self.model not in supported_models:
+            raise ValueError(
+                f"Unsupported model for {self.provider}: {self.model}. "
+                f"Choose one of: {', '.join(supported_models)}"
+            )
+        return self
 
 
 class TailorResponse(BaseModel):

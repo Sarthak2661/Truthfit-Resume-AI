@@ -8,30 +8,36 @@ from dotenv import load_dotenv
 from google import genai
 
 from source.services.observability import log_event, log_warning, timed_operation
+from source.ai.errors import (
+    ProviderAuthenticationError,
+    ProviderError,
+    ProviderModelUnavailableError,
+    ProviderRateLimitError,
+    ProviderTimeoutError,
+    ProviderUnavailableError,
+)
 
 load_dotenv()
 
 
 PROVIDER_MODELS = {
     "Gemini": [
-        "gemini-3.6-flash",
-        "gemini-2.5-flash-lite",
-        "gemini-2.0-flash",
+        "gemini-3.8-flash",
+        "gemini-3.7-flash",
+        "gemini-3.5-flash-lite",
     ],
     "Claude": [
-        "claude-3-5-sonnet-latest",
-        "claude-3-5-haiku-latest",
-        "claude-3-opus-latest",
+        "claude-sonnet-5",
+        "claude-sonnet-4-6",
+        "claude-haiku-4-5-20251001",
     ],
     "OpenAI": [
-        "gpt-5.2",
-        "gpt-5.1",
-        "gpt-4.1",
+        "gpt-6-luna",
+        "gpt-6.1-sol",
+        "gpt-6-astra",
     ],
     "Perplexity": [
-        "sonar-pro",
         "sonar",
-        "sonar-reasoning-pro",
     ],
 }
 
@@ -39,7 +45,7 @@ PROVIDER_MODELS = {
 @dataclass(frozen=True)
 class LLMConfig:
     provider: str = "Gemini"
-    model: str = "gemini-3.6-flash"
+    model: str = "gemini-3.8-flash"
     api_key: str = ""
 
 
@@ -68,6 +74,8 @@ def resolve_api_key(provider: str, api_key: str = "") -> str:
 
 
 def is_retryable_error(error: Exception) -> bool:
+    if isinstance(error, ProviderError):
+        return error.retryable
     error_text = str(error).lower()
     retryable_signals = [
         "503",
@@ -84,6 +92,8 @@ def is_retryable_error(error: Exception) -> bool:
 
 
 def is_model_unavailable_error(error: Exception) -> bool:
+    if isinstance(error, ProviderModelUnavailableError):
+        return True
     error_text = str(error).lower()
     unavailable_signals = [
         "404",
@@ -154,7 +164,6 @@ def _call_openai(prompt: str, config: LLMConfig) -> str:
         json={
             "model": config.model,
             "input": prompt,
-            "temperature": 0.2,
         },
         timeout=90,
     )
@@ -180,32 +189,52 @@ def _call_perplexity(prompt: str, config: LLMConfig) -> str:
         raise ValueError("Missing Perplexity API key. Add one in the sidebar or .env.")
 
     response = requests.post(
-        "https://api.perplexity.ai/chat/completions",
+        "https://api.perplexity.ai/v1/agent",
         headers={
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         },
         json={
-            "model": config.model,
-            "temperature": 0.2,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": "Return concise, truthful output. Follow the user's schema exactly when one is provided.",
-                },
-                {"role": "user", "content": prompt},
-            ],
+            "model": f"perplexity/{config.model}",
+            "input": prompt,
+            "max_output_tokens": 4096,
         },
         timeout=90,
     )
     response.raise_for_status()
     payload = response.json()
-    choices = payload.get("choices", [])
+    if payload.get("output_text"):
+        return str(payload["output_text"]).strip()
 
-    if not choices:
-        return ""
+    output_parts = []
+    for item in payload.get("output", []):
+        for content in item.get("content", []):
+            if content.get("type") in {"output_text", "text"}:
+                output_parts.append(str(content.get("text") or ""))
+    return "\n".join(output_parts).strip()
 
-    return choices[0].get("message", {}).get("content", "").strip()
+
+def _typed_provider_error(error: Exception, provider: str, model: str) -> ProviderError:
+    if isinstance(error, ProviderError):
+        return error
+
+    status_code = getattr(getattr(error, "response", None), "status_code", None)
+    error_text = str(error).lower()
+    details = {"provider": provider, "model": model}
+
+    if status_code in {401, 403} or any(signal in error_text for signal in ("invalid api key", "unauthorized", "authentication")):
+        return ProviderAuthenticationError(str(error), **details)
+    if status_code == 429 or "rate limit" in error_text:
+        return ProviderRateLimitError(str(error), **details)
+    if status_code in {408, 504} or "timeout" in error_text or "timed out" in error_text:
+        return ProviderTimeoutError(str(error), **details)
+    if is_model_unavailable_error(error):
+        return ProviderModelUnavailableError(str(error), **details)
+    if (status_code is not None and status_code >= 500) or any(
+        signal in error_text for signal in ("503", "unavailable", "overloaded")
+    ):
+        return ProviderUnavailableError(str(error), **details)
+    return ProviderError(str(error), **details)
 
 
 def call_llm_with_retry(prompt: str, config: LLMConfig) -> str:
@@ -251,16 +280,17 @@ def call_llm_with_retry(prompt: str, config: LLMConfig) -> str:
                     return _call_gemini(prompt, active_config)
 
             except Exception as exc:
-                last_error = exc
+                typed_error = _typed_provider_error(exc, provider, model)
+                last_error = typed_error
 
-                if not is_retryable_error(exc):
-                    if is_model_unavailable_error(exc) and model != models[-1]:
+                if not is_retryable_error(typed_error):
+                    if is_model_unavailable_error(typed_error) and model != models[-1]:
                         log_warning(
                             "llm_call_model_unavailable",
                             provider=provider,
                             model=model,
                             attempt=attempt + 1,
-                            error_type=exc.__class__.__name__,
+                            error_type=typed_error.__class__.__name__,
                         )
                         break
 
@@ -269,9 +299,9 @@ def call_llm_with_retry(prompt: str, config: LLMConfig) -> str:
                         provider=provider,
                         model=model,
                         attempt=attempt + 1,
-                        error_type=exc.__class__.__name__,
+                        error_type=typed_error.__class__.__name__,
                     )
-                    raise exc
+                    raise typed_error from exc
 
                 wait_seconds = (2 ** (attempt + 1)) + random.uniform(0, 1.5)
                 log_event(
@@ -280,8 +310,10 @@ def call_llm_with_retry(prompt: str, config: LLMConfig) -> str:
                     model=model,
                     attempt=attempt + 1,
                     wait_seconds=round(wait_seconds, 2),
-                    error_type=exc.__class__.__name__,
+                    error_type=typed_error.__class__.__name__,
                 )
                 time.sleep(wait_seconds)
 
+    if last_error is None:
+        raise ProviderUnavailableError("No provider model could be called.", provider=provider, model=config.model)
     raise last_error

@@ -3,7 +3,8 @@ import re
 
 from source.ai.prompts import build_resume_analysis_prompt
 from source.ai.providers import LLMConfig, call_llm_with_retry
-from source.ai.schemas import default_analysis_result, validate_analysis_result
+from source.ai.errors import ProviderError, ProviderResponseError
+from source.ai.schemas import validate_analysis_result
 from source.services.observability import log_warning, new_request_id, timed_operation
 
 
@@ -29,7 +30,7 @@ def generate_resume_analysis(
     include_cover_letter: bool = False,
     user_projects: str = "",
     provider: str = "Gemini",
-    model: str = "gemini-2.5-flash",
+    model: str = "gemini-3.8-flash",
     api_key: str = "",
 ) -> dict:
     request_id = new_request_id()
@@ -69,15 +70,14 @@ def generate_resume_analysis(
             model=model,
             error_type=exc.__class__.__name__,
         )
-        fallback = default_analysis_result(
-            f"{provider} returned a response, but it was not valid JSON."
-        )
+        raise ProviderResponseError(
+            f"{provider} returned invalid JSON.",
+            provider=provider,
+            model=model,
+        ) from exc
 
-        if "output_text" in locals():
-            fallback["match_summary"]["short_explanation"] = output_text[:1200]
-
-        return fallback
-
+    except ProviderError:
+        raise
     except Exception as exc:
         log_warning(
             "analysis_generation_failed",
@@ -86,6 +86,4 @@ def generate_resume_analysis(
             model=model,
             error_type=exc.__class__.__name__,
         )
-        return default_analysis_result(
-            f"{provider} API error after retries/fallback models: {str(exc)}"
-        )
+        raise ProviderError(str(exc), provider=provider, model=model) from exc

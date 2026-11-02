@@ -4,6 +4,7 @@ import { ErrorPanel } from "../../../components/ErrorPanel";
 import { FitReviewNav } from "../../../components/FitReviewNav";
 import { ScoreCard } from "../../../components/ScoreCard";
 import { TrackerAction } from "../../../components/TrackerAction";
+import { AnalysisRunStatus } from "../../../components/AnalysisRunStatus";
 import { getAnalysis } from "../../../lib/api";
 
 type PageProps = {
@@ -265,6 +266,10 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
 
   try {
     const run = await getAnalysis(id);
+    if (run.status !== "completed") {
+      const errorMessage = String(run.analysis?.error?.message ?? "");
+      return <AnalysisRunStatus runId={id} initialStatus={run.status} initialError={errorMessage} />;
+    }
     const analysis = run.analysis;
     const scores = analysis.scores ?? {};
     const summary = analysis.match_summary ?? {};

@@ -8,6 +8,7 @@ DEVELOPMENT_CORS_ORIGINS = (
     "http://127.0.0.1:3000",
 )
 SUPPORTED_ENVIRONMENTS = {"development", "test", "production"}
+SUPPORTED_QUEUE_BACKENDS = {"background", "rq"}
 
 
 @dataclass(frozen=True)
@@ -23,6 +24,22 @@ def runtime_environment() -> str:
         supported = ", ".join(sorted(SUPPORTED_ENVIRONMENTS))
         raise RuntimeError(f"TRUTHFIT_ENV must be one of: {supported}.")
     return environment
+
+
+def analysis_queue_backend() -> str:
+    default_backend = "rq" if runtime_environment() == "production" else "background"
+    backend = (os.getenv("TRUTHFIT_ANALYSIS_QUEUE") or default_backend).strip().lower()
+    if backend not in SUPPORTED_QUEUE_BACKENDS:
+        supported = ", ".join(sorted(SUPPORTED_QUEUE_BACKENDS))
+        raise RuntimeError(f"TRUTHFIT_ANALYSIS_QUEUE must be one of: {supported}.")
+    return backend
+
+
+def redis_url() -> str:
+    value = (os.getenv("REDIS_URL") or "").strip()
+    if analysis_queue_backend() == "rq" and not value:
+        raise RuntimeError("REDIS_URL is required when TRUTHFIT_ANALYSIS_QUEUE=rq.")
+    return value
 
 
 def allowed_cors_origins() -> list[str]:

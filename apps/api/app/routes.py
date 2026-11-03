@@ -1,8 +1,8 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, Query, Request, UploadFile, status
 
 from apps.api.app.auth import CurrentUser, get_current_user
 from apps.api.app.analysis_queue import enqueue_analysis
-from apps.api.app.config import analysis_queue_backend
+from apps.api.app.config import analysis_queue_backend, max_page_size
 
 from apps.api.app.schemas import (
     AnalysisRunRequest,
@@ -87,6 +87,13 @@ def run_analysis_endpoint(
     payload: AnalysisRunRequest,
     background_tasks: BackgroundTasks,
     current_user: CurrentUser = Depends(get_current_user),
+    idempotency_key: str | None = Header(
+        default=None,
+        alias="Idempotency-Key",
+        min_length=8,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]+$",
+    ),
 ) -> AnalysisRunResponse:
     use_server_key = analysis_queue_backend() == "rq"
     if use_server_key and payload.api_key:
@@ -98,7 +105,10 @@ def run_analysis_endpoint(
         payload=payload,
         request_id=request.state.request_id,
         current_user=current_user,
+        idempotency_key=idempotency_key,
     )
+    if accepted.idempotent_replay:
+        return accepted
     try:
         enqueue_analysis(
             background_tasks=background_tasks,
@@ -139,10 +149,16 @@ def delete_account_data_endpoint(
 
 @router.get("/analysis", response_model=AnalysisListResponse, tags=["analysis"])
 def list_analysis_endpoint(
-    limit: int = 20,
+    limit: int = Query(default=20, ge=1, le=500),
+    offset: int = Query(default=0, ge=0, le=1_000_000),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> AnalysisListResponse:
-    return list_analysis_runs(current_user=current_user, limit=limit)
+    if limit > max_page_size():
+        raise HTTPException(
+            status_code=422,
+            detail=f"limit must be no greater than {max_page_size()}.",
+        )
+    return list_analysis_runs(current_user=current_user, limit=limit, offset=offset)
 
 
 @router.get("/analysis/{run_id}", response_model=StoredAnalysisResponse, tags=["analysis"])

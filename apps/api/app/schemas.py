@@ -101,6 +101,7 @@ class AnalysisRunResponse(BaseModel):
     run_id: str
     status: str = "pending"
     status_url: str
+    idempotent_replay: bool = False
 
 
 class AnalysisListItem(BaseModel):
@@ -118,6 +119,9 @@ class AnalysisListItem(BaseModel):
 
 class AnalysisListResponse(BaseModel):
     analyses: list[AnalysisListItem]
+    total: int = 0
+    limit: int = 20
+    offset: int = 0
 
 
 class DashboardSummaryResponse(BaseModel):

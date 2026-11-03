@@ -16,7 +16,7 @@ The repository currently contains two interfaces:
 
 ## Current Product Status
 
-The first five security and reliability phases of the Next.js/FastAPI product path are complete:
+The first six security and reliability phases of the Next.js/FastAPI product path are complete:
 
 | Phase | Status | Delivered |
 | --- | --- | --- |
@@ -25,6 +25,7 @@ The first five security and reliability phases of the Next.js/FastAPI product pa
 | Reliability Phase 2: analysis lifecycle | Complete | Durable pending, processing, completed, and failed states; `202 Accepted` analysis requests; client polling; typed provider errors; independently committed failure events; and Redis/RQ production dispatch. |
 | Privacy Phase 3: retention and deletion | Complete | Redacted-only default persistence, optional AES-GCM encrypted originals, per-analysis and account-data deletion, configurable expiry, cleanup tooling, and memory-only browser BYOK credentials. |
 | LLM Phase 4: boundary and schema hardening | Complete | Strict nested Pydantic contracts, generated JSON Schema, fail-closed provider validation, untrusted-document delimiters, and malformed-output and prompt-injection tests. |
+| API Phase 5: hardening and scale | Complete | Streamed upload limits, request deadlines, Redis-backed production rate limits, trusted hosts, security headers, bounded pagination, idempotent analysis creation, and SQL-backed skill-gap aggregation. |
 
 Supabase stores login identities in its managed `auth.users` table, visible under **Authentication > Users**. TruthFit stores its application user record and owned analyses in the database selected by `DATABASE_URL`. A local `DATABASE_URL` therefore keeps application tables in local PostgreSQL even though authentication is handled by Supabase.
 
@@ -59,6 +60,7 @@ flowchart LR
     shared --> providers["Gemini / Claude / OpenAI / Perplexity"]
     providers --> schema["Structured validation and normalization"]
     schema --> db[("PostgreSQL / SQLite")]
+    db --> gaps["SQL skill-gap summary"]
     schema --> review["Fit review and tailoring"]
     db --> history["Analysis history and job tracker"]
     sample["No-API sample analysis"] --> streamlit
@@ -69,6 +71,7 @@ The UI layers do not contain the core analysis logic. FastAPI routes call servic
 - `apps/web/` contains the Next.js product interface.
 - `apps/api/` contains FastAPI routes, application services, and SQLAlchemy repositories.
 - Local analysis work uses FastAPI background tasks. Production uses Redis and RQ so provider calls do not hold request or database transactions open.
+- Production API replicas share Redis-backed rate limits; local development uses an in-memory limiter.
 - `source/ai/` contains prompts, provider clients, retry/fallback behavior, and structured schemas.
 - `source/loaders/` contains upload validation and shared file extraction.
 - `source/services/` contains evidence, scoring, reporting, privacy, tracker, URL, and observability logic.

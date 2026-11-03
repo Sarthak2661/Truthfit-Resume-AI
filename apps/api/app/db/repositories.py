@@ -1,10 +1,8 @@
 from datetime import datetime, timedelta, timezone
-from collections import Counter
-
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from apps.api.app.db.models import AgentEvent, AnalysisRun, Evidence, Job, Resume, User
+from apps.api.app.db.models import AgentEvent, AnalysisRun, Evidence, Job, Resume, SkillGap, User
 from apps.api.app.config import retention_days
 
 
@@ -75,6 +73,8 @@ def create_analysis_run(
     job_id: str,
     provider: str,
     model: str,
+    idempotency_key: str | None = None,
+    request_fingerprint: str | None = None,
 ) -> AnalysisRun:
     run = AnalysisRun(
         user_id=user_id,
@@ -83,6 +83,8 @@ def create_analysis_run(
         status="pending",
         provider=provider,
         model=model,
+        idempotency_key=idempotency_key,
+        request_fingerprint=request_fingerprint,
         expires_at=datetime.now(timezone.utc) + timedelta(days=retention_days("pending")),
     )
     session.add(run)
@@ -96,6 +98,7 @@ def complete_analysis_run(session: Session, run: AnalysisRun, analysis: dict) ->
     run.result_json = analysis
     run.completed_at = datetime.now(timezone.utc)
     run.expires_at = run.completed_at + timedelta(days=retention_days("completed"))
+    replace_skill_gap_records(session, run.id, run.user_id, analysis)
     session.flush()
     return run
 
@@ -133,6 +136,19 @@ def get_analysis_run_internal(session: Session, run_id: str) -> AnalysisRun | No
     return session.scalar(select(AnalysisRun).where(AnalysisRun.id == run_id))
 
 
+def get_analysis_run_by_idempotency_key(
+    session: Session,
+    user_id: str,
+    idempotency_key: str,
+) -> AnalysisRun | None:
+    return session.scalar(
+        select(AnalysisRun).where(
+            AnalysisRun.user_id == user_id,
+            AnalysisRun.idempotency_key == idempotency_key,
+        )
+    )
+
+
 def account_data_summary(session: Session, user_id: str) -> dict:
     def count(model) -> int:
         return int(
@@ -166,6 +182,7 @@ def delete_analysis_run(session: Session, run: AnalysisRun) -> dict[str, int]:
     job_id = run.job_id
     session.execute(delete(Evidence).where(Evidence.analysis_run_id == run.id))
     session.execute(delete(AgentEvent).where(AgentEvent.analysis_run_id == run.id))
+    session.execute(delete(SkillGap).where(SkillGap.analysis_run_id == run.id))
     session.delete(run)
     session.flush()
 
@@ -269,6 +286,36 @@ def add_agent_event(
     return event
 
 
+def replace_skill_gap_records(
+    session: Session,
+    analysis_run_id: str,
+    user_id: str,
+    analysis: dict,
+) -> list[SkillGap]:
+    session.execute(delete(SkillGap).where(SkillGap.analysis_run_id == analysis_run_id))
+    missing_skills = analysis.get("skills_analysis", {}).get("missing_skills", [])
+    unique_skills: dict[str, str] = {}
+    for item in missing_skills:
+        raw_skill = item.get("skill") or item.get("requirement") if isinstance(item, dict) else item
+        display_skill = " ".join(str(raw_skill or "").split())[:255]
+        normalized_skill = display_skill.casefold()
+        if normalized_skill:
+            unique_skills.setdefault(normalized_skill, display_skill)
+
+    records = [
+        SkillGap(
+            analysis_run_id=analysis_run_id,
+            user_id=user_id,
+            normalized_skill=normalized,
+            display_skill=display,
+        )
+        for normalized, display in unique_skills.items()
+    ]
+    session.add_all(records)
+    session.flush()
+    return records
+
+
 def get_analysis_run(session: Session, run_id: str, user_id: str) -> AnalysisRun | None:
     return session.scalar(
         select(AnalysisRun).where(
@@ -308,11 +355,17 @@ def update_tracker_status(
     return run
 
 
-def list_analysis_runs(session: Session, user_id: str, limit: int = 20) -> list[AnalysisRun]:
+def list_analysis_runs(
+    session: Session,
+    user_id: str,
+    limit: int = 20,
+    offset: int = 0,
+) -> list[AnalysisRun]:
     statement = (
         select(AnalysisRun)
         .where(AnalysisRun.user_id == user_id)
         .order_by(AnalysisRun.created_at.desc())
+        .offset(offset)
         .limit(limit)
     )
     return list(session.scalars(statement))
@@ -367,21 +420,14 @@ def provider_usage(session: Session, user_id: str) -> list[dict]:
 
 
 def common_skill_gaps(session: Session, user_id: str, limit: int = 8) -> list[dict]:
-    gaps = Counter()
-
-    for run in session.scalars(
-        select(AnalysisRun).where(
-            AnalysisRun.user_id == user_id,
-            AnalysisRun.status == "completed",
+    rows = session.execute(
+        select(
+            func.min(SkillGap.display_skill),
+            func.count(SkillGap.id).label("gap_count"),
         )
-    ):
-        missing_skills = run.result_json.get("skills_analysis", {}).get("missing_skills", [])
-        for item in missing_skills:
-            if isinstance(item, dict):
-                skill = str(item.get("skill") or item.get("requirement") or "").strip()
-            else:
-                skill = str(item).strip()
-            if skill:
-                gaps[skill] += 1
-
-    return [{"skill": skill, "count": count} for skill, count in gaps.most_common(limit)]
+        .where(SkillGap.user_id == user_id)
+        .group_by(SkillGap.normalized_skill)
+        .order_by(func.count(SkillGap.id).desc(), func.min(SkillGap.display_skill).asc())
+        .limit(limit)
+    )
+    return [{"skill": skill, "count": count} for skill, count in rows]

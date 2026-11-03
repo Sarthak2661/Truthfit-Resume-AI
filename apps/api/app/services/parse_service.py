@@ -5,6 +5,8 @@ import re
 from fastapi import UploadFile
 
 from apps.api.app.schemas import JobParseResponse, ResumeParseResponse
+from apps.api.app.config import max_upload_bytes
+from apps.api.app.errors import UploadTooLargeError
 from source.loaders.jd_loader import extract_jd_text
 from source.loaders.resume_loader import extract_text_from_file
 from source.services.observability import timed_operation
@@ -44,8 +46,16 @@ async def _to_uploaded_bytes(file: UploadFile | None) -> UploadedBytes | None:
     if file is None:
         return None
 
-    content = await file.read()
-    return UploadedBytes(content=content, name=file.filename or "uploaded.txt")
+    limit = max_upload_bytes()
+    chunks: list[bytes] = []
+    total = 0
+    while chunk := await file.read(64 * 1024):
+        total += len(chunk)
+        if total > limit:
+            max_mb = limit // (1024 * 1024)
+            raise UploadTooLargeError(f"Uploaded file is too large. Use a file under {max_mb} MB.")
+        chunks.append(chunk)
+    return UploadedBytes(content=b"".join(chunks), name=file.filename or "uploaded.txt")
 
 
 async def parse_resume(file: UploadFile, request_id: str) -> ResumeParseResponse:

@@ -4,11 +4,18 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from apps.api.app.routes import router
-from apps.api.app.config import allowed_cors_origins
+from apps.api.app.config import allowed_cors_origins, trusted_hosts
 from apps.api.app.db.database import init_db
-from apps.api.app.errors import ResourceNotFoundError
+from apps.api.app.errors import ResourceNotFoundError, UploadTooLargeError
+from apps.api.app.middleware import (
+    RateLimitMiddleware,
+    RequestBodyLimitMiddleware,
+    RequestTimeoutMiddleware,
+    SecurityHeadersMiddleware,
+)
 from apps.api.app.schemas import ErrorResponse
 from source.services.observability import log_event, log_warning, new_request_id
 
@@ -38,6 +45,11 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=trusted_hosts())
+    app.add_middleware(RequestTimeoutMiddleware)
+    app.add_middleware(RateLimitMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(RequestBodyLimitMiddleware)
 
     @app.middleware("http")
     async def add_request_id(request: Request, call_next):
@@ -56,6 +68,15 @@ def create_app() -> FastAPI:
         log_warning("api_validation_failed", request_id=request_id, error_type=exc.__class__.__name__)
         return JSONResponse(
             status_code=400,
+            content=ErrorResponse(request_id=request_id, detail=str(exc)).model_dump(),
+            headers={"x-request-id": request_id},
+        )
+
+    @app.exception_handler(UploadTooLargeError)
+    async def upload_too_large_handler(request: Request, exc: UploadTooLargeError):
+        request_id = getattr(request.state, "request_id", new_request_id())
+        return JSONResponse(
+            status_code=413,
             content=ErrorResponse(request_id=request_id, detail=str(exc)).model_dump(),
             headers={"x-request-id": request_id},
         )

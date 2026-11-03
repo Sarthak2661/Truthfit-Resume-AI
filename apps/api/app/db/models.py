@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
 
@@ -64,6 +64,9 @@ class Job(Base):
 
 class AnalysisRun(Base):
     __tablename__ = "analysis_runs"
+    __table_args__ = (
+        UniqueConstraint("user_id", "idempotency_key", name="uq_analysis_runs_user_id_idempotency_key"),
+    )
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
@@ -72,6 +75,8 @@ class AnalysisRun(Base):
     status: Mapped[str] = mapped_column(String(50), default="pending", index=True, nullable=False)
     provider: Mapped[str] = mapped_column(String(80), nullable=False)
     model: Mapped[str] = mapped_column(String(120), nullable=False)
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    request_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
     overall_score: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     result_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
@@ -83,6 +88,7 @@ class AnalysisRun(Base):
     job: Mapped[Job] = relationship(back_populates="analysis_runs")
     evidence: Mapped[list["Evidence"]] = relationship(back_populates="analysis_run")
     agent_events: Mapped[list["AgentEvent"]] = relationship(back_populates="analysis_run")
+    skill_gaps: Mapped[list["SkillGap"]] = relationship(back_populates="analysis_run")
 
 
 class Evidence(Base):
@@ -111,3 +117,19 @@ class AgentEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
     analysis_run: Mapped[AnalysisRun] = relationship(back_populates="agent_events")
+
+
+class SkillGap(Base):
+    __tablename__ = "skill_gaps"
+    __table_args__ = (
+        UniqueConstraint("analysis_run_id", "normalized_skill", name="uq_skill_gaps_run_skill"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    analysis_run_id: Mapped[str] = mapped_column(ForeignKey("analysis_runs.id"), index=True, nullable=False)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    normalized_skill: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
+    display_skill: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    analysis_run: Mapped[AnalysisRun] = relationship(back_populates="skill_gaps")

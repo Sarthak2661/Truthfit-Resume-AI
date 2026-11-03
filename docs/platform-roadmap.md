@@ -46,6 +46,19 @@ Status: implemented.
 
 Operational follow-up: add a versioned live-provider evaluation set to measure injection resistance and schema-valid response rates across model upgrades.
 
+## API Phase 5: Hardening And Scale
+
+Status: implemented.
+
+- Uploads are consumed in bounded chunks with route and request-level size ceilings.
+- Trusted hosts, explicit CORS origins, request deadlines, security headers, and bounded pagination protect the HTTP boundary.
+- Local rate limits use process memory; production defaults to Redis for consistency across replicas.
+- Analysis creation supports per-user idempotency keys and rejects key reuse with different payloads.
+- Missing skills are stored in normalized rows and aggregated in SQL for the dashboard.
+- The frontend and API require explicit deployed URLs, origins, and hosts.
+
+Operational follow-up: add account-tier quotas, provider-cost budgets, distributed tracing, and load tests against the deployed topology.
+
 ## Reliability Phase 2: Analysis Lifecycle
 
 Status: implemented.

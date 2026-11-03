@@ -1,6 +1,6 @@
 # FastAPI Backend
 
-The API backend lives in `apps/api` and can run independently from Streamlit. Phase 0 production safeguards, Phase 1 authentication/ownership, the Phase 2 durable analysis lifecycle, Phase 3 privacy controls, and Phase 4 LLM boundary hardening are implemented.
+The API backend lives in `apps/api` and can run independently from Streamlit. Phases 0-5 cover production configuration, ownership, durable analysis state, privacy controls, LLM boundary validation, and API hardening.
 
 ## Run Locally
 
@@ -20,8 +20,8 @@ OpenAPI and Swagger UI are available at:
 | `GET` | `/health` | Health check for deployment and smoke testing. |
 | `POST` | `/resumes/parse` | Parse a resume upload and return original plus redacted text. |
 | `POST` | `/jobs/parse` | Parse a job description upload, pasted JD text, and optional job link. |
-| `POST` | `/analysis/run` | Create a pending analysis and return `202 Accepted` with a run ID and status URL. |
-| `GET` | `/analysis` | List recent saved analyses for dashboard/history views. |
+| `POST` | `/analysis/run` | Create a pending analysis and return `202 Accepted`. Supports a per-user `Idempotency-Key` header. |
+| `GET` | `/analysis` | List owned analyses with bounded `limit` and `offset` pagination. |
 | `GET` | `/analysis/{run_id}` | Retrieve a saved analysis, status, provider/model, and overall score from the database. |
 | `DELETE` | `/analysis/{run_id}` | Delete one owned analysis and orphaned resume/job records. |
 | `GET` | `/account/data` | Inspect owned record counts, retained-original count, and retention period. |
@@ -76,6 +76,15 @@ Local development permits the Next.js origins automatically. Production requires
 ```bash
 TRUTHFIT_ENV=production
 TRUTHFIT_ALLOWED_ORIGINS=https://app.example.com
+TRUTHFIT_TRUSTED_HOSTS=api.example.com
+TRUTHFIT_MAX_UPLOAD_BYTES=5242880
+TRUTHFIT_MAX_REQUEST_BYTES=12582912
+TRUTHFIT_REQUEST_TIMEOUT_SECONDS=60
+TRUTHFIT_RATE_LIMIT_BACKEND=redis
+TRUTHFIT_RATE_LIMIT_WINDOW_SECONDS=60
+TRUTHFIT_RATE_LIMIT_REQUESTS=120
+TRUTHFIT_ANALYSIS_RATE_LIMIT_REQUESTS=10
+TRUTHFIT_MAX_PAGE_SIZE=100
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_JWT_AUDIENCE=authenticated
 NEXT_PUBLIC_TRUTHFIT_API_URL=https://api.example.com
@@ -90,7 +99,17 @@ TRUTHFIT_CLEANUP_ENABLED=true
 TRUTHFIT_RETENTION_ENCRYPTION_KEY=base64-encoded-32-byte-key
 ```
 
-`TRUTHFIT_ALLOWED_ORIGINS` accepts a comma-separated list of complete HTTP(S) origins. Wildcards, paths, query strings, and malformed origins are rejected. All resume, job, analysis, tailoring, dashboard, and tracker routes require a Supabase access token. `/health` and `/providers` remain public.
+`TRUTHFIT_ALLOWED_ORIGINS` accepts complete frontend HTTP(S) origins. `TRUTHFIT_TRUSTED_HOSTS` accepts API hostnames without schemes or paths. Both are mandatory in production; wildcards and malformed values are rejected. Production rate limiting defaults to Redis so limits remain consistent across API replicas. All resume, job, analysis, tailoring, dashboard, and tracker routes require a Supabase access token. `/health` and `/providers` remain public.
+
+## API hardening
+
+- Multipart uploads are read in 64 KiB chunks and stop once `TRUTHFIT_MAX_UPLOAD_BYTES` is crossed. Upload routes also receive an early body-size ceiling before multipart parsing.
+- General and analysis-specific rate limits return `429` with `Retry-After`; production uses Redis and fails closed with `503` if the limiter is unavailable.
+- Requests exceeding `TRUTHFIT_REQUEST_TIMEOUT_SECONDS` return `504`.
+- API and Next.js responses include clickjacking, MIME-sniffing, referrer, and browser-permission headers. Production API responses add HSTS.
+- `GET /analysis` returns `total`, `limit`, and `offset`; the configured page ceiling prevents unbounded history reads.
+- Reusing an `Idempotency-Key` with the same request returns the original run. Reusing it with different content returns `400`.
+- Missing skills are normalized into `skill_gaps` and aggregated with SQL rather than loading every completed result document into Python.
 
 ## Authentication and ownership
 
@@ -107,7 +126,7 @@ TRUTHFIT_RETENTION_ENCRYPTION_KEY=base64-encoded-32-byte-key
 - Job descriptions and structured analysis results are stored until deletion or expiry.
 - Deleting application data does not remove the corresponding Supabase Auth identity.
 - A deployment scheduler must invoke the cleanup command; the API process does not run its own scheduler.
-- Rate limits, managed quotas, and provider-cost controls remain future work.
+- Provider-cost quotas and account-level subscription limits remain future work.
 
 ## Analysis Lifecycle
 
@@ -140,6 +159,8 @@ Run migrations:
 ```bash
 alembic upgrade head
 ```
+
+Revision `0004_api_hardening` adds per-user idempotency constraints and the normalized `skill_gaps` table. It backfills missing-skill rows from existing completed analysis results.
 
 ### Phase 3 local upgrade
 

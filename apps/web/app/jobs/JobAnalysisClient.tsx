@@ -36,6 +36,7 @@ export function JobAnalysisClient({ providers }: { providers: ProviderInfo[] }) 
   const resumeFormRef = useRef<HTMLFormElement>(null);
   const jobFormRef = useRef<HTMLFormElement>(null);
   const analysisFormRef = useRef<HTMLFormElement>(null);
+  const analysisRequestRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const [job, setJob] = useState<JobParseResult | null>(null);
   const [resume, setResume] = useState<ResumeParseResult | null>(null);
   const [resumeText, setResumeText] = useState("");
@@ -174,25 +175,34 @@ export function JobAnalysisClient({ providers }: { providers: ProviderInfo[] }) 
       const jobDescription = job?.text || String(form.get("job_description") ?? "");
       const jobLink = job?.job_link || String(form.get("job_link") ?? "");
 
+      const payload = {
+        resume_text: resumeText,
+        resume_file_name: resumeFileName,
+        job_description: jobDescription,
+        job_link: jobLink,
+        job_title: form.get("job_title"),
+        company: form.get("company"),
+        include_cover_letter: form.get("include_cover_letter") === "on",
+        user_projects: form.get("user_projects"),
+        provider,
+        model,
+        api_key: apiKey,
+        retain_original_resume: retainOriginal,
+        resume_formatting_checks: resume?.ats_formatting_checks ?? [],
+        target_region: targetRegion,
+      };
+      const fingerprint = JSON.stringify(payload);
+      if (analysisRequestRef.current?.fingerprint !== fingerprint) {
+        analysisRequestRef.current = { fingerprint, key: crypto.randomUUID() };
+      }
+
       const response = await authenticatedFetch("/analysis/run", {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          resume_text: resumeText,
-          resume_file_name: resumeFileName,
-          job_description: jobDescription,
-          job_link: jobLink,
-          job_title: form.get("job_title"),
-          company: form.get("company"),
-          include_cover_letter: form.get("include_cover_letter") === "on",
-          user_projects: form.get("user_projects"),
-          provider,
-          model,
-          api_key: apiKey,
-          retain_original_resume: retainOriginal,
-          resume_formatting_checks: resume?.ats_formatting_checks ?? [],
-          target_region: targetRegion,
-        }),
+        headers: {
+          "content-type": "application/json",
+          "idempotency-key": analysisRequestRef.current.key,
+        },
+        body: fingerprint,
       });
 
       if (!response.ok) {

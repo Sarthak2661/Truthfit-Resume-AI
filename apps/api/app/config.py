@@ -7,8 +7,10 @@ DEVELOPMENT_CORS_ORIGINS = (
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 )
+DEVELOPMENT_TRUSTED_HOSTS = ("localhost", "127.0.0.1", "testserver")
 SUPPORTED_ENVIRONMENTS = {"development", "test", "production"}
 SUPPORTED_QUEUE_BACKENDS = {"background", "rq"}
+SUPPORTED_RATE_LIMIT_BACKENDS = {"memory", "redis"}
 
 
 @dataclass(frozen=True)
@@ -37,9 +39,20 @@ def analysis_queue_backend() -> str:
 
 def redis_url() -> str:
     value = (os.getenv("REDIS_URL") or "").strip()
-    if analysis_queue_backend() == "rq" and not value:
-        raise RuntimeError("REDIS_URL is required when TRUTHFIT_ANALYSIS_QUEUE=rq.")
+    if (analysis_queue_backend() == "rq" or rate_limit_backend() == "redis") and not value:
+        raise RuntimeError(
+            "REDIS_URL is required when the analysis queue or rate limiter uses Redis."
+        )
     return value
+
+
+def rate_limit_backend() -> str:
+    default_backend = "redis" if runtime_environment() == "production" else "memory"
+    backend = (os.getenv("TRUTHFIT_RATE_LIMIT_BACKEND") or default_backend).strip().lower()
+    if backend not in SUPPORTED_RATE_LIMIT_BACKENDS:
+        supported = ", ".join(sorted(SUPPORTED_RATE_LIMIT_BACKENDS))
+        raise RuntimeError(f"TRUTHFIT_RATE_LIMIT_BACKEND must be one of: {supported}.")
+    return backend
 
 
 def retention_days(status: str = "completed") -> int:
@@ -71,6 +84,49 @@ def retention_cleanup_enabled() -> bool:
 
 def retention_encryption_key() -> str:
     return (os.getenv("TRUTHFIT_RETENTION_ENCRYPTION_KEY") or "").strip()
+
+
+def max_upload_bytes() -> int:
+    return _bounded_int("TRUTHFIT_MAX_UPLOAD_BYTES", 5 * 1024 * 1024, 1024, 25 * 1024 * 1024)
+
+
+def max_request_bytes() -> int:
+    minimum = max_upload_bytes() + 1024
+    default = max(12 * 1024 * 1024, minimum)
+    return _bounded_int("TRUTHFIT_MAX_REQUEST_BYTES", default, minimum, 30 * 1024 * 1024)
+
+
+def request_timeout_seconds() -> int:
+    return _bounded_int("TRUTHFIT_REQUEST_TIMEOUT_SECONDS", 60, 5, 300)
+
+
+def rate_limit_window_seconds() -> int:
+    return _bounded_int("TRUTHFIT_RATE_LIMIT_WINDOW_SECONDS", 60, 1, 3600)
+
+
+def general_rate_limit() -> int:
+    return _bounded_int("TRUTHFIT_RATE_LIMIT_REQUESTS", 120, 1, 10_000)
+
+
+def analysis_rate_limit() -> int:
+    return _bounded_int("TRUTHFIT_ANALYSIS_RATE_LIMIT_REQUESTS", 10, 1, 1000)
+
+
+def max_page_size() -> int:
+    return _bounded_int("TRUTHFIT_MAX_PAGE_SIZE", 100, 1, 500)
+
+
+def trusted_hosts() -> list[str]:
+    raw_hosts = (os.getenv("TRUTHFIT_TRUSTED_HOSTS") or "").strip()
+    if not raw_hosts:
+        if runtime_environment() == "production":
+            raise RuntimeError("TRUTHFIT_TRUSTED_HOSTS is required when TRUTHFIT_ENV=production.")
+        return list(DEVELOPMENT_TRUSTED_HOSTS)
+
+    hosts = [_validate_host(value) for value in raw_hosts.split(",") if value.strip()]
+    if not hosts:
+        raise RuntimeError("TRUTHFIT_TRUSTED_HOSTS must include at least one hostname.")
+    return list(dict.fromkeys(hosts))
 
 
 def allowed_cors_origins() -> list[str]:
@@ -134,3 +190,35 @@ def _validate_origin(value: str) -> str:
     ):
         raise RuntimeError(f"Invalid CORS origin: {value.strip()}")
     return origin
+
+
+def _validate_host(value: str) -> str:
+    host = value.strip().lower()
+    if not host or "://" in host or "/" in host or "@" in host or host == "*":
+        raise RuntimeError(f"Invalid trusted host: {value.strip()}")
+    if host.startswith("*."):
+        suffix = host[2:]
+        if not suffix or "." not in suffix:
+            raise RuntimeError(f"Invalid trusted host: {value.strip()}")
+        return host
+    parsed = urlsplit(f"//{host}")
+    if not parsed.hostname or parsed.path or parsed.query or parsed.fragment:
+        raise RuntimeError(f"Invalid trusted host: {value.strip()}")
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise RuntimeError(f"Invalid trusted host: {value.strip()}") from exc
+    if port is not None:
+        raise RuntimeError("TRUTHFIT_TRUSTED_HOSTS entries must not include ports.")
+    return host
+
+
+def _bounded_int(variable: str, default: int, minimum: int, maximum: int) -> int:
+    raw_value = (os.getenv(variable) or str(default)).strip()
+    try:
+        value = int(raw_value)
+    except ValueError as exc:
+        raise RuntimeError(f"{variable} must be an integer.") from exc
+    if value < minimum or value > maximum:
+        raise RuntimeError(f"{variable} must be between {minimum} and {maximum}.")
+    return value

@@ -1,5 +1,8 @@
 from collections import defaultdict
+import hashlib
+import json
 from time import perf_counter
+from sqlalchemy.exc import IntegrityError
 
 from apps.api.app.db.database import session_scope
 from apps.api.app.db import repositories
@@ -36,53 +39,82 @@ def create_pending_analysis(
     payload: AnalysisRunRequest,
     request_id: str,
     current_user: CurrentUser,
+    idempotency_key: str | None = None,
 ) -> AnalysisRunResponse:
     provider = payload.provider
     model = payload.model or PROVIDER_MODELS[provider][0]
+    request_fingerprint = _analysis_request_fingerprint(payload)
     redacted_resume = redact_personal_details(payload.resume_text)
     encrypted_original = None
     encryption_nonce = None
     if payload.retain_original_resume:
         encrypted_original, encryption_nonce = encrypt_retained_text(payload.resume_text)
 
-    with session_scope() as session:
-        user = repositories.get_or_create_user(
-            session,
-            auth_subject=current_user.subject,
-            email=current_user.email,
-        )
-        resume = repositories.create_resume(
-            session=session,
-            user_id=user.id,
-            file_name=payload.resume_file_name,
-            redacted_text=redacted_resume,
-            encrypted_original=encrypted_original,
-            encryption_nonce=encryption_nonce,
-        )
+    try:
+        with session_scope() as session:
+            user = repositories.get_or_create_user(
+                session,
+                auth_subject=current_user.subject,
+                email=current_user.email,
+            )
+            if idempotency_key:
+                existing = repositories.get_analysis_run_by_idempotency_key(
+                    session, user.id, idempotency_key
+                )
+                if existing:
+                    _ensure_matching_idempotent_request(existing, request_fingerprint)
+                    return _analysis_run_response(existing, request_id, replayed=True)
 
-        job = repositories.create_job(
-            session=session,
-            user_id=user.id,
-            title=payload.job_title,
-            company=payload.company,
-            description=payload.job_description,
-        )
+            resume = repositories.create_resume(
+                session=session,
+                user_id=user.id,
+                file_name=payload.resume_file_name,
+                redacted_text=redacted_resume,
+                encrypted_original=encrypted_original,
+                encryption_nonce=encryption_nonce,
+            )
 
-        run = repositories.create_analysis_run(
-            session=session,
-            user_id=user.id,
-            resume_id=resume.id,
-            job_id=job.id,
-            provider=provider,
-            model=model,
-        )
-        repositories.add_agent_event(
-            session=session,
-            analysis_run_id=run.id,
-            agent_name="analysis",
-            status="pending",
-        )
-        run_id = run.id
+            job = repositories.create_job(
+                session=session,
+                user_id=user.id,
+                title=payload.job_title,
+                company=payload.company,
+                description=payload.job_description,
+            )
+
+            run = repositories.create_analysis_run(
+                session=session,
+                user_id=user.id,
+                resume_id=resume.id,
+                job_id=job.id,
+                provider=provider,
+                model=model,
+                idempotency_key=idempotency_key,
+                request_fingerprint=request_fingerprint,
+            )
+            repositories.add_agent_event(
+                session=session,
+                analysis_run_id=run.id,
+                agent_name="analysis",
+                status="pending",
+            )
+            run_id = run.id
+    except IntegrityError:
+        if not idempotency_key:
+            raise
+        with session_scope() as session:
+            user = repositories.get_or_create_user(
+                session,
+                auth_subject=current_user.subject,
+                email=current_user.email,
+            )
+            existing = repositories.get_analysis_run_by_idempotency_key(
+                session, user.id, idempotency_key
+            )
+            if existing:
+                _ensure_matching_idempotent_request(existing, request_fingerprint)
+                return _analysis_run_response(existing, request_id, replayed=True)
+        raise
 
     return AnalysisRunResponse(
         request_id=request_id,
@@ -90,6 +122,27 @@ def create_pending_analysis(
         status="pending",
         status_url=f"/analysis/{run_id}",
     )
+
+
+def _analysis_run_response(run, request_id: str, replayed: bool) -> AnalysisRunResponse:
+    return AnalysisRunResponse(
+        request_id=request_id,
+        run_id=run.id,
+        status=run.status,
+        status_url=f"/analysis/{run.id}",
+        idempotent_replay=replayed,
+    )
+
+
+def _analysis_request_fingerprint(payload: AnalysisRunRequest) -> str:
+    safe_payload = payload.model_dump(exclude={"api_key"})
+    serialized = json.dumps(safe_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _ensure_matching_idempotent_request(run, request_fingerprint: str) -> None:
+    if run.request_fingerprint and run.request_fingerprint != request_fingerprint:
+        raise ValueError("Idempotency-Key was already used with a different analysis request.")
 
 
 def build_analysis_task_payload(payload: AnalysisRunRequest, server_managed_key: bool) -> dict:
@@ -225,11 +278,21 @@ def get_analysis_run(run_id: str, current_user: CurrentUser) -> StoredAnalysisRe
         )
 
 
-def list_analysis_runs(current_user: CurrentUser, limit: int = 20) -> AnalysisListResponse:
+def list_analysis_runs(
+    current_user: CurrentUser,
+    limit: int = 20,
+    offset: int = 0,
+) -> AnalysisListResponse:
     with session_scope() as session:
         user = _resolve_user(session, current_user)
-        runs = repositories.list_analysis_runs(session, user.id, limit=limit)
-        return AnalysisListResponse(analyses=[_analysis_list_item(run) for run in runs])
+        runs = repositories.list_analysis_runs(session, user.id, limit=limit, offset=offset)
+        total = repositories.analysis_counts(session, user.id)["total"]
+        return AnalysisListResponse(
+            analyses=[_analysis_list_item(run) for run in runs],
+            total=total,
+            limit=limit,
+            offset=offset,
+        )
 
 
 def dashboard_summary(current_user: CurrentUser) -> DashboardSummaryResponse:

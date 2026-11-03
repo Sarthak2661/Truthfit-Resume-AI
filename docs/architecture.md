@@ -22,7 +22,9 @@ flowchart LR
     providers --> schema["Structured result validation<br>Pydantic schemas"]
     schema --> services["Evidence, scoring, tracker,<br>report, observability services"]
     api_services --> privacy["Privacy storage<br>redaction / AES-GCM / retention"]
-    privacy --> db["SQLAlchemy persistence<br>users / resumes / jobs / runs / evidence / events"]
+    privacy --> db["SQLAlchemy persistence<br>users / resumes / jobs / runs / evidence / skill gaps / events"]
+    api --> perimeter["API perimeter<br>limits / timeouts / hosts / headers"]
+    perimeter --> redis_limits["Redis rate limits<br>production replicas"]
     db --> api_services
     services --> worker
     services --> pages["Streamlit pages<br>Home / Analyze / Dashboard / Chat / Tracker"]
@@ -33,7 +35,9 @@ flowchart LR
 - `app.py` owns Streamlit bootstrapping, session state, theme state, provider settings, and top-level page routing.
 - `apps/web/` contains the Phase 3 Next.js frontend for dashboard, resume, job, analysis, tailoring, and provider workflows.
 - `apps/api/` exposes the FastAPI backend with parse, queued analysis, tailoring, health, and provider endpoints.
+- `apps/api/app/middleware.py` enforces request sizes, deadlines, security headers, trusted-host-compatible request handling, and memory/Redis rate limits.
 - `apps/api/app/db/` contains the Phase 2 SQLAlchemy models, database session management, and repositories.
+- Missing skills are normalized into `skill_gaps`; dashboard recurrence counts use SQL grouping rather than scanning analysis JSON in application memory.
 - `apps/api/app/analysis_queue.py` selects local background execution or Redis/RQ dispatch. Provider calls run outside database transactions, and each lifecycle transition is committed separately.
 - `apps/api/app/services/privacy_service.py` owns data inspection, per-run deletion, account-data deletion, and expiry cleanup. `source/services/privacy_storage.py` owns authenticated encryption for explicitly retained originals.
 - `source/pages/` contains user-facing page flows.

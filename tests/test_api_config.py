@@ -3,8 +3,13 @@ import pytest
 from apps.api.app.config import (
     DEVELOPMENT_CORS_ORIGINS,
     allowed_cors_origins,
+    max_page_size,
+    rate_limit_backend,
+    redis_url,
+    request_timeout_seconds,
     runtime_environment,
     supabase_auth_settings,
+    trusted_hosts,
 )
 
 
@@ -21,6 +26,46 @@ def test_production_requires_explicit_cors_origins(monkeypatch):
 
     with pytest.raises(RuntimeError, match="TRUTHFIT_ALLOWED_ORIGINS is required"):
         allowed_cors_origins()
+
+
+def test_production_requires_explicit_trusted_hosts(monkeypatch):
+    monkeypatch.setenv("TRUTHFIT_ENV", "production")
+    monkeypatch.delenv("TRUTHFIT_TRUSTED_HOSTS", raising=False)
+
+    with pytest.raises(RuntimeError, match="TRUTHFIT_TRUSTED_HOSTS is required"):
+        trusted_hosts()
+
+
+def test_numeric_hardening_settings_are_bounded(monkeypatch):
+    monkeypatch.setenv("TRUTHFIT_REQUEST_TIMEOUT_SECONDS", "45")
+    monkeypatch.setenv("TRUTHFIT_MAX_PAGE_SIZE", "50")
+
+    assert request_timeout_seconds() == 45
+    assert max_page_size() == 50
+
+    monkeypatch.setenv("TRUTHFIT_MAX_PAGE_SIZE", "0")
+    with pytest.raises(RuntimeError, match="TRUTHFIT_MAX_PAGE_SIZE"):
+        max_page_size()
+
+
+def test_production_rate_limits_require_redis(monkeypatch):
+    monkeypatch.setenv("TRUTHFIT_ENV", "production")
+    monkeypatch.delenv("TRUTHFIT_RATE_LIMIT_BACKEND", raising=False)
+    monkeypatch.delenv("REDIS_URL", raising=False)
+
+    assert rate_limit_backend() == "redis"
+    with pytest.raises(RuntimeError, match="REDIS_URL is required"):
+        redis_url()
+
+
+def test_trusted_hosts_reject_origins_and_ports(monkeypatch):
+    monkeypatch.setenv("TRUTHFIT_TRUSTED_HOSTS", "https://api.example.com")
+    with pytest.raises(RuntimeError, match="Invalid trusted host"):
+        trusted_hosts()
+
+    monkeypatch.setenv("TRUTHFIT_TRUSTED_HOSTS", "api.example.com:443")
+    with pytest.raises(RuntimeError, match="must not include ports"):
+        trusted_hosts()
 
 
 def test_runtime_environment_rejects_unknown_value(monkeypatch):

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "data-engineer-supported-core",
+    "version": "v1",
+    "resume": "Data engineer who built Python and SQL ETL pipelines backed by PostgreSQL. No Kubernetes experience is listed.",
+    "job_description": "Data Engineer requiring Python, SQL, ETL, PostgreSQL, and optional Kubernetes.",
+    "expected": {
+      "score_ranges": {
+        "overall_match_score": [65, 90],
+        "technical_match_score": [70, 95],
+        "resume_evidence_score": [65, 95]
+      },
+      "required_evidence_terms": ["python", "sql", "postgresql"],
+      "forbidden_claim_terms": ["built kubernetes clusters"]
+    }
+  },
+  {
+    "id": "analyst-missing-cloud-proof",
+    "version": "v1",
+    "resume": "Analyst with Power BI, SQL dashboards, and stakeholder reporting. Cloud deployment is not mentioned.",
+    "job_description": "Analytics Engineer requiring SQL, Power BI, stakeholder communication, and AWS deployment evidence.",
+    "expected": {
+      "score_ranges": {
+        "overall_match_score": [50, 80],
+        "technical_match_score": [55, 85],
+        "resume_evidence_score": [50, 85]
+      },
+      "required_evidence_terms": ["power bi", "sql", "stakeholder"],
+      "forbidden_claim_terms": ["deployed analytics workloads on aws"]
+    }
+  }
+]

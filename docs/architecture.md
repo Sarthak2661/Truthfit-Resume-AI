@@ -1,6 +1,6 @@
 # TruthFit Architecture
 
-TruthFit is currently a Streamlit-first portfolio application with an extracted FastAPI backend, SQLAlchemy persistence, and a first Next.js frontend. The codebase keeps the original Streamlit demo runnable while the API-first product path grows under `apps/`.
+TruthFit has two explicit surfaces: a public Streamlit v1 portfolio demo and an authenticated Next.js/FastAPI product stack that is currently verified locally. Shared loaders, analysis services, privacy controls, and provider contracts support both paths without implying that the Streamlit deployment hosts the newer product.
 
 ## Current Architecture
 
@@ -72,6 +72,27 @@ flowchart TB
     api --> metrics["Prometheus metrics"]
     metrics --> grafana["Grafana dashboards"]
 ```
+
+## API Deployment Topology
+
+The currently public URL serves Streamlit v1. The topology below is required for the newer authenticated product:
+
+```mermaid
+flowchart TB
+    user["User browser"] -->|HTTPS| web["Next.js frontend"]
+    web -->|Supabase session| auth["Supabase Auth"]
+    web -->|Bearer JWT + HTTPS| api["FastAPI replicas"]
+    api -->|SQL + TLS| postgres[("Managed PostgreSQL")]
+    api -->|rate limits + jobs| redis[("Private Redis / TLS")]
+    redis --> worker["RQ worker replicas"]
+    worker -->|server-managed keys| llm["Gemini / Claude / OpenAI / Perplexity"]
+    scheduler["Daily cleanup scheduler"] --> api
+    ci["GitHub Actions"] --> staging["Staging verification"]
+    staging --> web
+    staging --> api
+```
+
+Production configures the frontend URL, API URL, CORS origins, trusted API hosts, Supabase issuer/audience, PostgreSQL URL, private Redis URL, retention key, and server-managed provider credentials independently.
 
 ## Migration Principle
 

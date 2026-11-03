@@ -2,10 +2,14 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { supabasePublicConfig } from "./lib/supabase/config";
+import { e2eAuthBypassEnabled } from "./lib/e2e-auth";
 
 const PUBLIC_PATHS = new Set(["/", "/login", "/auth/callback"]);
 
 export async function proxy(request: NextRequest) {
+  if (e2eAuthBypassEnabled()) {
+    return NextResponse.next({ request });
+  }
   let response = NextResponse.next({ request });
   const { url, publishableKey } = supabasePublicConfig();
   const supabase = createServerClient(url, publishableKey, {

@@ -1,0 +1,34 @@
+{
+  "data-engineer-supported-core": {
+    "scores": {
+      "overall_match_score": 78,
+      "technical_match_score": 84,
+      "resume_evidence_score": 80
+    },
+    "skills_analysis": {
+      "matched_skills": [
+        {"skill": "Python", "resume_evidence": "Built Python ETL pipelines."},
+        {"skill": "SQL", "resume_evidence": "Built SQL transformations backed by PostgreSQL."}
+      ]
+    },
+    "evidence_based_matches": [
+      {"requirement": "PostgreSQL", "resume_evidence": "PostgreSQL is explicitly listed with pipeline work."}
+    ]
+  },
+  "analyst-missing-cloud-proof": {
+    "scores": {
+      "overall_match_score": 68,
+      "technical_match_score": 72,
+      "resume_evidence_score": 70
+    },
+    "skills_analysis": {
+      "matched_skills": [
+        {"skill": "Power BI", "resume_evidence": "Built Power BI dashboards."},
+        {"skill": "SQL", "resume_evidence": "Used SQL for reporting datasets."}
+      ]
+    },
+    "confidence_findings": [
+      {"finding": "Stakeholder reporting is supported.", "resume_evidence": "Delivered stakeholder reporting."}
+    ]
+  }
+}

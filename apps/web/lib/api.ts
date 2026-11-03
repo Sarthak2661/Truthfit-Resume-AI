@@ -8,15 +8,19 @@ import type {
   TrackerItem,
 } from "./api-types";
 import { createClient } from "./supabase/server";
+import { E2E_AUTH_TOKEN, e2eAuthBypassEnabled } from "./e2e-auth";
 
 export type { AnalysisListItem, ProviderInfo } from "./api-types";
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.getSession();
-  const accessToken = data.session?.access_token;
-  if (error || !accessToken) {
-    throw new Error("Authentication is required.");
+  let accessToken = E2E_AUTH_TOKEN;
+  if (!e2eAuthBypassEnabled()) {
+    const supabase = await createClient();
+    const { data, error } = await supabase.auth.getSession();
+    accessToken = data.session?.access_token ?? "";
+    if (error || !accessToken) {
+      throw new Error("Authentication is required.");
+    }
   }
 
   const headers = new Headers(init?.headers);

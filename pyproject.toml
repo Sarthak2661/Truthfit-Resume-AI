@@ -5,3 +5,10 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F"]
 ignore = ["E501"]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: requires a real PostgreSQL database",
+    "security: adversarial authorization, upload, token, and prompt checks",
+    "evaluation: versioned LLM quality fixture checks",
+]

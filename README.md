@@ -5,6 +5,11 @@
 
 **Public demo (Streamlit v1):** https://truthfit-resume-ai-vaos6czappyfazhugbyffub.streamlit.app/
 
+| Product surface | Availability | Purpose |
+| --- | --- | --- |
+| Streamlit v1 | **Live public demo** | Portfolio-safe sample workflow, report views, export, chat, and local tracker. |
+| Next.js + FastAPI | **Local product; not publicly hosted yet** | Authenticated accounts, persisted reviews, privacy controls, background analysis, and database-backed tracking. |
+
 TruthFit Resume AI is an evidence-grounded resume and job-fit review product. It compares a resume against a specific job description, explains the match score, checks whether important claims are backed by real evidence, and turns gaps into practical resume improvements and application actions.
 
 The goal is not to "game" an ATS or invent stronger experience. TruthFit is built around a simple idea: a resume should be tailored only with evidence that already exists in the candidate's work, projects, education, or portfolio.
@@ -16,7 +21,7 @@ The repository currently contains two interfaces:
 
 ## Current Product Status
 
-The first six security and reliability phases of the Next.js/FastAPI product path are complete:
+The first seven security and reliability phases of the Next.js/FastAPI product path are complete:
 
 | Phase | Status | Delivered |
 | --- | --- | --- |
@@ -26,6 +31,7 @@ The first six security and reliability phases of the Next.js/FastAPI product pat
 | Privacy Phase 3: retention and deletion | Complete | Redacted-only default persistence, optional AES-GCM encrypted originals, per-analysis and account-data deletion, configurable expiry, cleanup tooling, and memory-only browser BYOK credentials. |
 | LLM Phase 4: boundary and schema hardening | Complete | Strict nested Pydantic contracts, generated JSON Schema, fail-closed provider validation, untrusted-document delimiters, and malformed-output and prompt-injection tests. |
 | API Phase 5: hardening and scale | Complete | Streamed upload limits, request deadlines, Redis-backed production rate limits, trusted hosts, security headers, bounded pagination, idempotent analysis creation, and SQL-backed skill-gap aggregation. |
+| Verification Phase 6: production checks | Complete | PostgreSQL service-container tests, Playwright product journeys, bounded load scenarios, adversarial security tests, and versioned LLM evaluation fixtures. |
 
 Supabase stores login identities in its managed `auth.users` table, visible under **Authentication > Users**. TruthFit stores its application user record and owned analyses in the database selected by `DATABASE_URL`. A local `DATABASE_URL` therefore keeps application tables in local PostgreSQL even though authentication is handled by Supabase.
 
@@ -251,13 +257,14 @@ The deployed Streamlit interface remains available as a self-contained portfolio
 
 ## Setup
 
-TruthFit is developed and tested with **Python 3.12.8**. The repository includes `.python-version` and `runtime.txt` so local and deployment environments can use the same version.
+TruthFit is developed and tested with **Python 3.12.14**. The repository includes `.python-version`, `runtime.txt`, and a runtime check so local and CI environments use Python 3.12 rather than the system Python 3.14 installation.
 
 ### Python Environment
 
 ```powershell
 py -3.12 -m venv .venv
 .venv\Scripts\Activate.ps1
+python scripts/check_python_version.py
 pip install -r requirements.txt
 pip install -r requirements-dev.txt
 ```
@@ -291,7 +298,7 @@ SUPABASE_JWT_AUDIENCE=authenticated
 TRUTHFIT_ANALYSIS_QUEUE=background
 ```
 
-For a public API deployment, use `TRUTHFIT_ANALYSIS_QUEUE=rq`, set `REDIS_URL`, and run an RQ worker. Keep Redis private and encrypted because queued jobs may contain a temporary bring-your-own provider key.
+For a public API deployment, use `TRUTHFIT_ANALYSIS_QUEUE=rq`, set `REDIS_URL`, and run an RQ worker. RQ mode rejects browser-provided keys and strips key fields before enqueueing; keep Redis private and encrypted because queued jobs still contain sensitive analysis metadata.
 
 The current provider catalog is returned by `GET /providers` and is the source of truth for both interfaces. Retired model IDs are rejected before an analysis is created.
 
@@ -375,20 +382,50 @@ npm run typecheck
 npm run build
 ```
 
-The current repository contains 70 Python tests, TypeScript validation, and a production Next.js build.
+Run the additional verification layers when changing API, auth, or model behavior:
+
+```powershell
+python -m pytest -q -m security
+python -m pytest -q -m evaluation
+python scripts/run_llm_evaluations.py
+
+cd apps\web
+$env:TRUTHFIT_E2E_PYTHON = "C:\path\to\repo\.venv\Scripts\python.exe"
+npx playwright install chromium
+npm run test:e2e
+```
+
+The repository now includes unit/API tests, marked security and LLM-evaluation suites, a real PostgreSQL integration test, Playwright browser workflows, TypeScript validation, and a production Next.js build.
 
 ### Continuous Integration
 
-GitHub Actions runs two independent checks on every push and pull request:
+GitHub Actions runs independent verification jobs on every push and pull request:
 
-- **Python:** installs the pinned dependencies on Python 3.12.8, runs `pytest -q`, and checks the repository with Ruff.
+- **Python:** installs the pinned dependencies on Python 3.12.14, verifies the interpreter, runs unit, security, and LLM-evaluation suites, and checks the repository with Ruff.
 - **Web:** installs the lockfile-pinned packages on Node.js 24, runs the TypeScript check, and creates a production Next.js build.
+- **PostgreSQL:** applies Alembic migrations to PostgreSQL 17 and runs repository integration tests.
+- **Browser:** installs Chromium and exercises upload, analysis, polling, tracker, and authorization workflows with Playwright.
+- **Load smoke:** submits bounded concurrent parsing and analysis traffic against the isolated E2E API.
 
-Both jobs must pass before a product update is considered ready to merge.
+All verification jobs must pass before a product update is considered ready to merge.
 
 ## Deployment
 
 The public Streamlit v1 demo is deployed on Streamlit Community Cloud. The Next.js product interface requires the frontend, API, and database to be deployed separately.
+
+```mermaid
+flowchart LR
+    browser["Browser"] --> web["Next.js frontend<br>Vercel / Node host"]
+    web --> auth["Supabase Auth"]
+    web --> api["FastAPI API<br>container host"]
+    api --> postgres[("Managed PostgreSQL")]
+    api --> redis[("Private TLS Redis")]
+    redis --> worker["RQ worker"]
+    worker --> providers["LLM providers"]
+    scheduler["Retention cleanup scheduler"] --> api
+```
+
+This diagram describes the **future public Next.js product deployment**, not the current Streamlit URL.
 
 | Component | Recommended deployment |
 | --- | --- |
@@ -396,6 +433,7 @@ The public Streamlit v1 demo is deployed on Streamlit Community Cloud. The Next.
 | Next.js frontend | Vercel, Netlify, or a Node-capable container host |
 | FastAPI backend | Render, Railway, Fly.io, or a container platform |
 | PostgreSQL | Neon, Supabase, Railway, or Render |
+| Redis and RQ worker | Private managed Redis plus a separate worker process/container |
 
 Keep provider keys out of the repository. The current portfolio flow supports user-provided keys; a production service should use controlled server-side keys with authentication, rate limits, and usage caps.
 
@@ -416,11 +454,11 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for deployment steps.
 
 ## Roadmap
 
-TruthFit now includes the Streamlit v1 baseline, FastAPI services, SQLAlchemy persistence, and the first Next.js product interface. The next work is focused on making that product path safer, more persistent, and easier to deploy. The detailed phased plan is tracked in [docs/platform-roadmap.md](docs/platform-roadmap.md).
+TruthFit now includes the Streamlit v1 baseline and a locally verified Next.js/FastAPI product with authenticated ownership, PostgreSQL persistence, asynchronous analysis, privacy controls, hardened schemas, API safeguards, and production verification suites. The detailed phased plan is tracked in [docs/platform-roadmap.md](docs/platform-roadmap.md).
 
 ### 1. Security and User-Scoped History
 
-Phases 0-3 now cover production configuration, account ownership, durable analysis state, redacted-only storage, optional encrypted retention, and user-controlled deletion. The next security work is rate limiting, abuse controls, managed provider quotas, key rotation, and security monitoring.
+Phases 0-6 now cover production configuration, account ownership, durable analysis state, redacted-only storage, optional encrypted retention, user-controlled deletion, rate limits, hostile-input tests, and cross-account authorization checks. The next security work is managed provider quotas, key rotation, audit trails, alerting, and an external security review before broad public use.
 
 ### 2. Persistent Resume Versions and Export
 
@@ -444,11 +482,11 @@ Add managed provider quotas, rate limiting, abuse controls, per-account usage re
 
 ### 7. Evaluation and Score Calibration
 
-Build a versioned evaluation dataset for requirement extraction, evidence precision, unsupported-claim detection, redaction, score stability, and tailoring safety.
+Expand the versioned evaluation baseline into a larger reviewed dataset for requirement extraction, evidence precision, unsupported-claim detection, redaction, score calibration, and tailoring safety. Add release-to-release drift reporting rather than relying only on pass/fail ranges.
 
 ### 8. Containerized Deployment and Observability
 
-Containerize the Next.js, FastAPI, and PostgreSQL product path. Add configurable production CORS, metrics, health monitoring, security scanning, and deployment automation.
+Containerize the Next.js, FastAPI, worker, and PostgreSQL product path. Production CORS and trusted-host controls are already configurable; add metrics, tracing, health monitoring, security scanning, staging promotion, and deployment automation.
 
 ## Privacy Note
 

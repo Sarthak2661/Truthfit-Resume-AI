@@ -1,13 +1,28 @@
 # Deployment Guide
 
-TruthFit Resume AI can be deployed on Streamlit Cloud or Hugging Face Spaces.
+TruthFit Resume AI currently has one public demo and one separately deployable product stack.
 
 The repo now contains two runnable interfaces:
 
-- Streamlit v1 at `app.py`
-- Next.js frontend at `apps/web`, backed by the FastAPI API at `apps/api`
+- Streamlit v1 at `app.py` is the current public portfolio demo.
+- The Next.js frontend at `apps/web`, backed by FastAPI at `apps/api`, is verified locally and is not served by the Streamlit URL.
 
-The product path includes Phase 0 reliability controls, Phase 1 authentication/ownership, the Phase 2 durable analysis lifecycle, and Phase 3 privacy controls. FastAPI validates Supabase access tokens, scopes records to the verified account, stores redacted resume text by default, and moves production provider work to Redis/RQ.
+The product path includes reliability, ownership, lifecycle, privacy, schema, API-hardening, and production-verification phases. FastAPI validates Supabase access tokens, scopes records to the verified account, stores redacted resume text by default, and moves production provider work to Redis/RQ.
+
+```mermaid
+flowchart LR
+    visitor["Portfolio visitor"] --> streamlit["Public Streamlit v1 demo"]
+    user["Product user"] --> web["Next.js frontend"]
+    web --> auth["Supabase Auth"]
+    web --> api["FastAPI API"]
+    api --> postgres[("PostgreSQL")]
+    api --> redis[("Private TLS Redis")]
+    redis --> worker["RQ worker"]
+    worker --> providers["LLM providers"]
+    scheduler["Retention scheduler"] --> api
+```
+
+Deploying Streamlit does not deploy the Next.js/FastAPI product. Those services need separate public hosts and environment configuration.
 
 ## Streamlit Cloud
 
@@ -70,6 +85,8 @@ Then run:
 ```bash
 alembic upgrade head
 ```
+
+The repository already contains versioned Alembic migrations under `alembic/versions/` and a development seed command at `scripts/seed_database.py`.
 
 If `DATABASE_URL` is not set, the API uses local SQLite at `.truthfit/truthfit.db`, which is useful for development but not for production hosting.
 
@@ -136,6 +153,8 @@ apps/web
 ```
 
 The Next.js app will not run the analysis workflow by itself; it requires the FastAPI backend and database to be deployed separately.
+
+Before making this stack public, run the same gates used in CI: PostgreSQL integration tests, Playwright workflows, security regressions, versioned LLM evaluations, and bounded load scenarios. The commands are documented in the README testing section.
 
 ## Privacy
 

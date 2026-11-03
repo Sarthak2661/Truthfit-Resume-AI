@@ -15,7 +15,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12.8"
+          python-version: "3.12.14"
           cache: pip
 
       - name: Install dependencies
@@ -23,8 +23,17 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt -r requirements-dev.txt
 
-      - name: Run tests
-        run: pytest -q
+      - name: Verify Python runtime
+        run: python scripts/check_python_version.py
+
+      - name: Run unit tests
+        run: pytest -q -m "not integration and not security and not evaluation"
+
+      - name: Run security tests
+        run: pytest -q -m security
+
+      - name: Run LLM evaluation fixtures
+        run: pytest -q -m evaluation
 
       - name: Run lint
         run: ruff check .
@@ -58,3 +67,118 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-publishable-key
         run: npm run build
+
+  postgres-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: truthfit_test
+          POSTGRES_USER: truthfit
+          POSTGRES_PASSWORD: truthfit_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U truthfit -d truthfit_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://truthfit:truthfit_test_password@127.0.0.1:5432/truthfit_test
+      TRUTHFIT_ENV: test
+      TRUTHFIT_RATE_LIMIT_BACKEND: memory
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.14"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Apply migrations
+        run: python -m alembic upgrade head
+
+      - name: Run PostgreSQL integration tests
+        run: pytest -q -m integration
+
+  browser-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.14"
+          cache: pip
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install backend dependencies
+        run: python -m pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Install frontend dependencies
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: apps/web
+        run: npx playwright install --with-deps chromium
+
+      - name: Run browser workflows
+        working-directory: apps/web
+        env:
+          TRUTHFIT_E2E_PYTHON: python
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 7
+
+  load-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.14"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Start test API and run bounded load scenarios
+        env:
+          TRUTHFIT_ANALYSIS_RATE_LIMIT_REQUESTS: 100
+          TRUTHFIT_RATE_LIMIT_REQUESTS: 100
+        run: |
+          python -m uvicorn tests.e2e.api_app:app --host 127.0.0.1 --port 8011 &
+          API_PID=$!
+          trap 'kill $API_PID' EXIT
+          for attempt in {1..30}; do
+            curl --fail --silent http://127.0.0.1:8011/health && break
+            sleep 1
+          done
+          python tests/load/run_load.py --base-url http://127.0.0.1:8011 --token truthfit-e2e-token --scenario parse --requests 12 --concurrency 3
+          python tests/load/run_load.py --base-url http://127.0.0.1:8011 --token truthfit-e2e-token --scenario analysis --requests 12 --concurrency 3

@@ -1,6 +1,6 @@
 # FastAPI Backend
 
-The API backend lives in `apps/api` and can run independently from Streamlit. Phases 0-5 cover production configuration, ownership, durable analysis state, privacy controls, LLM boundary validation, and API hardening.
+The API backend lives in `apps/api` and can run independently from Streamlit. Phases 0-6 cover production configuration, ownership, durable analysis state, privacy controls, LLM boundary validation, API hardening, and production verification.
 
 ## Run Locally
 
@@ -111,6 +111,14 @@ TRUTHFIT_RETENTION_ENCRYPTION_KEY=base64-encoded-32-byte-key
 - Reusing an `Idempotency-Key` with the same request returns the original run. Reusing it with different content returns `400`.
 - Missing skills are normalized into `skill_gaps` and aggregated with SQL rather than loading every completed result document into Python.
 
+## Production verification
+
+- `tests/integration/test_postgres.py` runs against PostgreSQL 17 after Alembic reaches `head`.
+- `apps/web/e2e` drives the browser workflow through an isolated test API with deterministic provider output. Its auth bypass is disabled whenever `NODE_ENV=production`.
+- `tests/load/run_load.py` reports throughput, median latency, p95 latency, and failures for bounded parse and analysis-submission traffic.
+- `tests/security` groups IDOR, token, upload, and hostile-document checks under the `security` marker.
+- `evaluations/v1` stores versioned score and evidence expectations; `scripts/run_llm_evaluations.py` detects baseline drift without calling a live provider.
+
 ## Authentication and ownership
 
 - The Next.js client signs users in through Supabase Auth.
@@ -210,4 +218,4 @@ Run migrations on a fresh database before starting the API. API startup also cre
 - Users can inspect record counts, delete one owned run, or delete all TruthFit application data. Cross-account deletion returns `404`.
 - `expires_at` is set per lifecycle state. Run `python scripts/cleanup_expired_data.py` from a daily scheduler to remove expired runs and orphaned resume/job records.
 - The Streamlit app still uses session analysis state and its separate local JSON tracker. It does not use the API database.
-- Automated API tests use SQLite and mocked provider responses. They do not verify a live PostgreSQL deployment or live provider calls.
+- Unit and browser suites use isolated SQLite databases and mocked provider responses. A separate integration suite applies the real Alembic migrations to PostgreSQL 17 and verifies repository round trips. Live provider calls remain intentionally outside CI to avoid secret exposure, cost, and nondeterministic failures.

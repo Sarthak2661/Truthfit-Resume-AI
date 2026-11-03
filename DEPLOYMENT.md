@@ -4,7 +4,7 @@ TruthFit Resume AI currently has one public demo and one separately deployable p
 
 The repo now contains two runnable interfaces:
 
-- Streamlit v1 at `app.py` is the current public portfolio demo.
+- Streamlit v1 at `app.py` is the temporary **Legacy Demo** during the product deployment transition.
 - The Next.js frontend at `apps/web`, backed by FastAPI at `apps/api`, is verified locally and is not served by the Streamlit URL.
 
 The product path includes reliability, ownership, lifecycle, privacy, schema, API-hardening, and production-verification phases. FastAPI validates Supabase access tokens, scopes records to the verified account, stores redacted resume text by default, and moves production provider work to Redis/RQ.

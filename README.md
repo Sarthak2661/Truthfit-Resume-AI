@@ -1,13 +1,13 @@
 # TruthFit Resume AI
 
 [![Tests](https://github.com/Sarthak2661/Truthfit-Resume-AI/actions/workflows/tests.yml/badge.svg)](https://github.com/Sarthak2661/Truthfit-Resume-AI/actions/workflows/tests.yml)
-[![Open Streamlit v1 Demo](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://truthfit-resume-ai-vaos6czappyfazhugbyffub.streamlit.app/)
+[![Open Legacy Streamlit Demo](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://truthfit-resume-ai-vaos6czappyfazhugbyffub.streamlit.app/)
 
-**Public demo (Streamlit v1):** https://truthfit-resume-ai-vaos6czappyfazhugbyffub.streamlit.app/
+**Legacy public demo (Streamlit v1):** https://truthfit-resume-ai-vaos6czappyfazhugbyffub.streamlit.app/
 
 | Product surface | Availability | Purpose |
 | --- | --- | --- |
-| Streamlit v1 | **Live public demo** | Portfolio-safe sample workflow, report views, export, chat, and local tracker. |
+| Streamlit v1 | **Legacy public demo** | Portfolio-safe sample workflow, report views, export, chat, and local tracker during the product deployment transition. |
 | Next.js + FastAPI | **Local product; not publicly hosted yet** | Authenticated accounts, persisted reviews, privacy controls, background analysis, and database-backed tracking. |
 
 TruthFit Resume AI is an evidence-grounded resume and job-fit review product. It compares a resume against a specific job description, explains the match score, checks whether important claims are backed by real evidence, and turns gaps into practical resume improvements and application actions.

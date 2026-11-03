@@ -3,6 +3,7 @@ import pytest
 from apps.api.app.config import (
     DEVELOPMENT_CORS_ORIGINS,
     allowed_cors_origins,
+    daily_analysis_quota,
     max_page_size,
     rate_limit_backend,
     redis_url,
@@ -46,6 +47,19 @@ def test_numeric_hardening_settings_are_bounded(monkeypatch):
     monkeypatch.setenv("TRUTHFIT_MAX_PAGE_SIZE", "0")
     with pytest.raises(RuntimeError, match="TRUTHFIT_MAX_PAGE_SIZE"):
         max_page_size()
+
+
+def test_daily_analysis_quota_uses_safe_environment_defaults(monkeypatch):
+    monkeypatch.setenv("TRUTHFIT_ENV", "test")
+    monkeypatch.delenv("TRUTHFIT_DAILY_ANALYSIS_QUOTA", raising=False)
+    assert daily_analysis_quota() == 100
+
+    monkeypatch.setenv("TRUTHFIT_ENV", "production")
+    assert daily_analysis_quota() == 5
+
+    monkeypatch.setenv("TRUTHFIT_DAILY_ANALYSIS_QUOTA", "0")
+    with pytest.raises(RuntimeError, match="TRUTHFIT_DAILY_ANALYSIS_QUOTA"):
+        daily_analysis_quota()
 
 
 def test_production_rate_limits_require_redis(monkeypatch):

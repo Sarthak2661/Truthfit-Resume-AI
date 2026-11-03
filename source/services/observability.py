@@ -19,6 +19,8 @@ ALLOWED_LOG_FIELDS = {
     "file_type",
     "page",
     "status",
+    "quota_limit",
+    "quota_used",
 }
 
 

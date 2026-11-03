@@ -24,7 +24,7 @@ OpenAPI and Swagger UI are available at:
 | `GET` | `/analysis` | List owned analyses with bounded `limit` and `offset` pagination. |
 | `GET` | `/analysis/{run_id}` | Retrieve a saved analysis, status, provider/model, and overall score from the database. |
 | `DELETE` | `/analysis/{run_id}` | Delete one owned analysis and orphaned resume/job records. |
-| `GET` | `/account/data` | Inspect owned record counts, retained-original count, and retention period. |
+| `GET` | `/account/data` | Inspect owned record counts, retained-original count, retention period, and daily analysis usage. |
 | `DELETE` | `/account/data` | Delete all TruthFit application data for the authenticated account. |
 | `POST` | `/tailor` | Return resume tailoring sections from an existing analysis or a fresh run. |
 | `GET` | `/providers` | List supported LLM providers, models, and defaults. |
@@ -84,6 +84,7 @@ TRUTHFIT_RATE_LIMIT_BACKEND=redis
 TRUTHFIT_RATE_LIMIT_WINDOW_SECONDS=60
 TRUTHFIT_RATE_LIMIT_REQUESTS=120
 TRUTHFIT_ANALYSIS_RATE_LIMIT_REQUESTS=10
+TRUTHFIT_DAILY_ANALYSIS_QUOTA=5
 TRUTHFIT_MAX_PAGE_SIZE=100
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_JWT_AUDIENCE=authenticated
@@ -134,7 +135,7 @@ TRUTHFIT_RETENTION_ENCRYPTION_KEY=base64-encoded-32-byte-key
 - Job descriptions and structured analysis results are stored until deletion or expiry.
 - Deleting application data does not remove the corresponding Supabase Auth identity.
 - A deployment scheduler must invoke the cleanup command; the API process does not run its own scheduler.
-- Provider-cost quotas and account-level subscription limits remain future work.
+- A per-account UTC-day analysis quota protects server-managed provider usage. Subscription billing and plan-specific quotas remain future work.
 
 ## Analysis Lifecycle
 

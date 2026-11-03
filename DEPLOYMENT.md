@@ -71,6 +71,7 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_JWT_AUDIENCE=authenticated
 TRUTHFIT_ANALYSIS_QUEUE=rq
 REDIS_URL=rediss://your-private-redis-host:6379/0
+TRUTHFIT_DAILY_ANALYSIS_QUOTA=5
 TRUTHFIT_RETENTION_DAYS=30
 TRUTHFIT_PENDING_RETENTION_DAYS=1
 TRUTHFIT_FAILED_RETENTION_DAYS=7
@@ -103,6 +104,10 @@ Run retention cleanup daily through the hosting platform's scheduler or cron ser
 ```bash
 python scripts/cleanup_expired_data.py
 ```
+
+The repository also includes `.github/workflows/retention-cleanup.yml`. To use it, add the hosted PostgreSQL connection string as the GitHub Actions secret `TRUTHFIT_PRODUCTION_DATABASE_URL`. Optional repository variables `TRUTHFIT_RETENTION_DAYS`, `TRUTHFIT_PENDING_RETENTION_DAYS`, and `TRUTHFIT_FAILED_RETENTION_DAYS` override the workflow defaults. The workflow skips cleanly until the database secret exists.
+
+`TRUTHFIT_DAILY_ANALYSIS_QUOTA` limits submitted analyses per authenticated account per UTC day. The production default is `5`; set it explicitly so billing behavior is intentional. Failed and pending submissions count because they can consume provider resources. Replaying an existing idempotency key does not consume another slot.
 
 Generate the optional retention key once and store it only in the API secret manager:
 
@@ -154,10 +159,30 @@ apps/web
 
 The Next.js app will not run the analysis workflow by itself; it requires the FastAPI backend and database to be deployed separately.
 
+### Uptime and error visibility
+
+Set these GitHub Actions repository variables after the frontend and API are deployed:
+
+```text
+TRUTHFIT_API_HEALTH_URL=https://your-api-host/health
+TRUTHFIT_WEB_URL=https://your-web-host
+```
+
+`.github/workflows/uptime-monitor.yml` checks both endpoints every 30 minutes and can also be run manually. Enable GitHub Actions failure notifications for the repository so a failed check reaches the maintainer. The API emits structured, request-ID-based failure logs without document text or provider keys; retain those logs in the API host and alert on repeated `5xx`, provider-failure, and quota events. This is a basic free-tier baseline, not a replacement for centralized tracing or incident management.
+
+In Supabase Authentication URL configuration, add the deployed frontend callback URL and password-recovery callback:
+
+```text
+https://your-web-host/auth/callback
+https://your-web-host/auth/callback?next=/reset-password
+```
+
+Password-reset emails exchange their recovery code through the callback and then open `/reset-password`. Test this flow with a real email address before launch.
+
 Before making this stack public, run the same gates used in CI: PostgreSQL integration tests, Playwright workflows, security regressions, versioned LLM evaluations, and bounded load scenarios. The commands are documented in the README testing section.
 
 ## Privacy
 
 Resume and job description text may be sent to the selected provider during live analysis. Do not upload sensitive documents unless you are comfortable sending that content to the selected provider.
 
-The API stores redacted resume text by default. Original resume text is transient unless the user explicitly enables retention, in which case it is encrypted with AES-GCM. Users can delete individual analyses or all TruthFit application data from Settings. The account-data action does not delete the Supabase login identity. Retention cleanup must be scheduled by the deployment platform. Streamlit's session-only analysis and local JSON tracker remain separate.
+The API stores redacted resume text by default. Original resume text is transient unless the user explicitly enables retention, in which case it is encrypted with AES-GCM. Users can delete individual analyses or all TruthFit application data from Settings. The account-data action does not delete the Supabase login identity. The frontend requires a separate consent checkbox before sending redacted documents to a provider. Retention cleanup must be scheduled through the deployment platform or the included GitHub Actions workflow. Streamlit's session-only analysis and local JSON tracker remain separate.

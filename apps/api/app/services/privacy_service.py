@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from apps.api.app.auth import CurrentUser
-from apps.api.app.config import retention_cleanup_enabled, retention_days
+from apps.api.app.config import daily_analysis_quota, retention_cleanup_enabled, retention_days
 from apps.api.app.db import repositories
 from apps.api.app.db.database import session_scope
 from apps.api.app.errors import ResourceNotFoundError
@@ -16,7 +16,16 @@ def inspect_account_data(current_user: CurrentUser) -> AccountDataResponse:
             email=current_user.email,
         )
         summary = repositories.account_data_summary(session, user.id)
-        return AccountDataResponse(**summary, retention_days=retention_days("completed"))
+        now = datetime.now(timezone.utc)
+        start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        return AccountDataResponse(
+            **summary,
+            retention_days=retention_days("completed"),
+            daily_analyses_used=repositories.count_analysis_runs_since(
+                session, user.id, start_of_day
+            ),
+            daily_analysis_limit=daily_analysis_quota(),
+        )
 
 
 def delete_owned_analysis(run_id: str, current_user: CurrentUser) -> None:

@@ -50,6 +50,7 @@ export function JobAnalysisClient({ providers }: { providers: ProviderInfo[] }) 
   const [model, setModel] = useState(providers[0]?.default_model ?? "");
   const [apiKey, setApiKey] = useState("");
   const [retainOriginal, setRetainOriginal] = useState(false);
+  const [analysisConsent, setAnalysisConsent] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [parsingResume, setParsingResume] = useState(false);
@@ -164,6 +165,10 @@ export function JobAnalysisClient({ providers }: { providers: ProviderInfo[] }) 
 
   async function runAnalysis() {
     if (!analysisFormRef.current) {
+      return;
+    }
+    if (!analysisConsent) {
+      setError("Confirm the analysis consent before sending documents to the selected provider.");
       return;
     }
 
@@ -399,6 +404,20 @@ export function JobAnalysisClient({ providers }: { providers: ProviderInfo[] }) 
             <small className="muted">Off by default. The redacted version is stored either way.</small>
           </span>
         </label>
+        <label className="privacy-retention-option analysis-consent">
+          <input
+            aria-label="Analysis consent"
+            checked={analysisConsent}
+            onChange={(event) => setAnalysisConsent(event.target.checked)}
+            type="checkbox"
+          />
+          <span>
+            <strong>I understand that redacted resume and job-description content will be sent to the selected analysis provider.</strong>
+            <small className="muted">
+              The redacted resume and job description will be sent to the selected provider. Review the <Link href="/privacy">Privacy Notice</Link>.
+            </small>
+          </span>
+        </label>
         <Link className="settings-link" href="/settings/providers">
           Advanced model settings
         </Link>
@@ -411,7 +430,7 @@ export function JobAnalysisClient({ providers }: { providers: ProviderInfo[] }) 
         </label>
         <input name="job_description" type="hidden" value={job?.text ?? ""} />
         <input name="job_link" type="hidden" value={job?.job_link ?? ""} />
-        <button className="button" type="button" onClick={runAnalysis} disabled={loading || !resumeText || !job}>
+        <button className="button" type="button" onClick={runAnalysis} disabled={loading || !resumeText || !job || !analysisConsent}>
           {loading ? "Running analysis..." : "Run Analysis"}
         </button>
         {error ? <div className="alert">{error}</div> : null}

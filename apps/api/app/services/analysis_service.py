@@ -1,4 +1,5 @@
 from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 from time import perf_counter
@@ -7,7 +8,8 @@ from sqlalchemy.exc import IntegrityError
 from apps.api.app.db.database import session_scope
 from apps.api.app.db import repositories
 from apps.api.app.auth import CurrentUser
-from apps.api.app.errors import ResourceNotFoundError
+from apps.api.app.config import daily_analysis_quota
+from apps.api.app.errors import AnalysisQuotaExceededError, ResourceNotFoundError
 from apps.api.app.schemas import (
     AnalysisListItem,
     AnalysisListResponse,
@@ -64,6 +66,15 @@ def create_pending_analysis(
                 if existing:
                     _ensure_matching_idempotent_request(existing, request_fingerprint)
                     return _analysis_run_response(existing, request_id, replayed=True)
+
+            now = datetime.now(timezone.utc)
+            start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            used = repositories.count_analysis_runs_since(session, user.id, start_of_day)
+            limit = daily_analysis_quota()
+            if used >= limit:
+                next_day = start_of_day + timedelta(days=1)
+                retry_after = max(1, int((next_day - now).total_seconds()))
+                raise AnalysisQuotaExceededError(limit, used, retry_after)
 
             resume = repositories.create_resume(
                 session=session,

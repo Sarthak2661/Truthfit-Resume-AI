@@ -11,6 +11,8 @@ type AccountData = {
   retained_originals: number;
   oldest_record: string | null;
   retention_days: number;
+  daily_analyses_used: number;
+  daily_analysis_limit: number;
 };
 
 export function AccountDataControls() {
@@ -67,6 +69,7 @@ export function AccountDataControls() {
           <DataPoint label="Resumes" value={data.resumes} />
           <DataPoint label="Jobs" value={data.jobs} />
           <DataPoint label="Encrypted originals" value={data.retained_originals} />
+          <DataPoint label="Analyses used today" value={`${data.daily_analyses_used} / ${data.daily_analysis_limit}`} />
         </div>
       ) : null}
       {data?.oldest_record ? <p className="muted">Oldest stored analysis: {new Date(data.oldest_record).toLocaleDateString()}</p> : null}
@@ -79,6 +82,6 @@ export function AccountDataControls() {
   );
 }
 
-function DataPoint({ label, value }: { label: string; value: number }) {
+function DataPoint({ label, value }: { label: string; value: number | string }) {
   return <div><strong>{value}</strong><span>{label}</span></div>;
 }

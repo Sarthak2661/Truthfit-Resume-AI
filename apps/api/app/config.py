@@ -112,6 +112,11 @@ def analysis_rate_limit() -> int:
     return _bounded_int("TRUTHFIT_ANALYSIS_RATE_LIMIT_REQUESTS", 10, 1, 1000)
 
 
+def daily_analysis_quota() -> int:
+    default = 5 if runtime_environment() == "production" else 100
+    return _bounded_int("TRUTHFIT_DAILY_ANALYSIS_QUOTA", default, 1, 1000)
+
+
 def max_page_size() -> int:
     return _bounded_int("TRUTHFIT_MAX_PAGE_SIZE", 100, 1, 500)
 

@@ -26,6 +26,7 @@ test("resume upload, analysis, and tracker workflow", async ({ page }) => {
 
   await page.getByLabel("Role title").fill("Data Engineer");
   await page.getByLabel("Company").fill("Northstar Analytics");
+  await page.getByLabel("Analysis consent").check();
   await page.getByRole("button", { name: "Run Analysis" }).click();
 
   await expect(page).toHaveURL(/\/analysis\/[a-f0-9]+/, { timeout: 20_000 });
@@ -38,4 +39,16 @@ test("resume upload, analysis, and tracker workflow", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Tracked opportunities" })).toBeVisible();
   await expect(page.getByText("Data Engineer").first()).toBeVisible();
   await expect(page.getByText("Northstar Analytics").first()).toBeVisible();
+});
+
+test("privacy, terms, and password recovery are available before sign-in", async ({ page }) => {
+  await page.goto("/privacy");
+  await expect(page.getByRole("heading", { name: "How TruthFit handles your data" })).toBeVisible();
+
+  await page.goto("/terms");
+  await expect(page.getByRole("heading", { name: "Terms for using TruthFit" })).toBeVisible();
+
+  await page.goto("/login");
+  await page.getByRole("button", { name: "Forgot password?" }).click();
+  await expect(page.getByRole("heading", { name: "Reset your password" })).toBeVisible();
 });

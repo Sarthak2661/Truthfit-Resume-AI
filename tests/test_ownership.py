@@ -1,3 +1,9 @@
+from contextlib import nullcontext
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
+from sqlalchemy.exc import IntegrityError
+
 from apps.api.app.db import repositories
 from apps.api.app.db.database import configure_database_for_tests, session_scope
 
@@ -40,3 +46,16 @@ def test_analysis_queries_are_scoped_to_authenticated_owner(tmp_path):
         assert repositories.analysis_counts(session, other_user_id)["total"] == 0
         assert repositories.common_skill_gaps(session, owner_id) == [{"skill": "Airflow", "count": 1}]
         assert repositories.common_skill_gaps(session, other_user_id) == []
+
+
+def test_get_or_create_user_recovers_from_concurrent_insert():
+    existing = SimpleNamespace(auth_subject="shared-sub", email="owner@example.com")
+    session = MagicMock()
+    session.scalar.side_effect = [None, existing]
+    session.begin_nested.return_value = nullcontext()
+    session.flush.side_effect = IntegrityError("insert", {}, Exception("duplicate"))
+
+    resolved = repositories.get_or_create_user(session, "shared-sub", "owner@example.com")
+
+    assert resolved is existing
+    assert session.scalar.call_count == 2

@@ -9,7 +9,11 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from apps.api.app.routes import router
 from apps.api.app.config import allowed_cors_origins, trusted_hosts
 from apps.api.app.db.database import init_db
-from apps.api.app.errors import ResourceNotFoundError, UploadTooLargeError
+from apps.api.app.errors import (
+    AnalysisQuotaExceededError,
+    ResourceNotFoundError,
+    UploadTooLargeError,
+)
 from apps.api.app.middleware import (
     RateLimitMiddleware,
     RequestBodyLimitMiddleware,
@@ -98,6 +102,24 @@ def create_app() -> FastAPI:
             status_code=404,
             content=ErrorResponse(request_id=request_id, detail=str(exc)).model_dump(),
             headers={"x-request-id": request_id},
+        )
+
+    @app.exception_handler(AnalysisQuotaExceededError)
+    async def analysis_quota_handler(request: Request, exc: AnalysisQuotaExceededError):
+        request_id = getattr(request.state, "request_id", new_request_id())
+        log_warning(
+            "analysis_quota_exceeded",
+            request_id=request_id,
+            quota_limit=exc.limit,
+            quota_used=exc.used,
+        )
+        return JSONResponse(
+            status_code=429,
+            content=ErrorResponse(request_id=request_id, detail=str(exc)).model_dump(),
+            headers={
+                "x-request-id": request_id,
+                "retry-after": str(exc.retry_after_seconds),
+            },
         )
 
     @app.exception_handler(Exception)

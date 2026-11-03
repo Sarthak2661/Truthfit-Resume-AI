@@ -514,6 +514,38 @@ def test_client_cannot_choose_record_owner(monkeypatch, tmp_path):
     assert response.status_code == 422
 
 
+def test_daily_analysis_quota_blocks_new_runs_but_allows_idempotent_replay(
+    monkeypatch, tmp_path
+):
+    from apps.api.app.services import analysis_service
+
+    monkeypatch.setenv("TRUTHFIT_DAILY_ANALYSIS_QUOTA", "1")
+    monkeypatch.setattr(analysis_service, "generate_resume_analysis", lambda **_: sample_analysis())
+    api = client(tmp_path)
+    payload = {
+        "resume_text": "Python ETL SQL",
+        "job_description": "Data Engineer with Python and SQL",
+        "provider": "Gemini",
+    }
+    headers = {"Idempotency-Key": "quota-test-request-1"}
+
+    first = api.post("/analysis/run", json=payload, headers=headers)
+    replay = api.post("/analysis/run", json=payload, headers=headers)
+    blocked = api.post(
+        "/analysis/run",
+        json={**payload, "job_description": "Another data engineering role"},
+        headers={"Idempotency-Key": "quota-test-request-2"},
+    )
+
+    assert first.status_code == 202
+    assert replay.status_code == 202
+    assert replay.json()["run_id"] == first.json()["run_id"]
+    assert replay.json()["idempotent_replay"] is True
+    assert blocked.status_code == 429
+    assert blocked.headers["retry-after"]
+    assert "daily analysis limit" in blocked.json()["detail"].lower()
+
+
 def test_cross_user_analysis_and_tracker_access_returns_404(monkeypatch, tmp_path):
     from apps.api.app.services import analysis_service
 
@@ -637,6 +669,8 @@ def test_account_summary_and_owned_analysis_deletion(monkeypatch, tmp_path):
     assert summary.json()["analyses"] == 1
     assert summary.json()["resumes"] == 1
     assert summary.json()["jobs"] == 1
+    assert summary.json()["daily_analyses_used"] == 1
+    assert summary.json()["daily_analysis_limit"] == 100
 
     deleted = api.delete(f"/analysis/{run_id}")
     assert deleted.status_code == 204

@@ -213,6 +213,8 @@ class AccountDataResponse(BaseModel):
     retained_originals: int
     oldest_record: str | None = None
     retention_days: int
+    daily_analyses_used: int
+    daily_analysis_limit: int
 
 
 class DataDeletionResponse(BaseModel):

@@ -7,8 +7,9 @@ import { getDashboardSummary } from "../../lib/api";
 
 const pipelineStages = ["Saved", "Applied", "Interview", "Rejected"];
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ confirmed?: string }> }) {
   try {
+    const query = await searchParams;
     const summary = await getDashboardSummary();
     const counts = summary.tracker_status_counts ?? {};
     const tracked = pipelineStages.reduce((total, stage) => total + Number(counts[stage] ?? 0), 0);
@@ -17,6 +18,7 @@ export default async function DashboardPage() {
 
     return (
       <section className="section">
+        {query.confirmed === "1" ? <div className="success">Email confirmed. Your account is ready.</div> : null}
         <div className="page-heading-row">
           <div>
             <div className="section-label">Job search dashboard</div>

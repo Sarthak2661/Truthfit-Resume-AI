@@ -54,6 +54,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </nav>
           </header>
           <main className="main">{children}</main>
+          <footer className="site-footer">
+            <span>TruthFit Resume AI</span>
+            <nav aria-label="Support and legal links">
+              <Link href="/privacy">Privacy</Link>
+              <Link href="/terms">Terms</Link>
+              <a href="https://github.com/Sarthak2661/Truthfit-Resume-AI" rel="noreferrer" target="_blank">GitHub</a>
+              <a href="https://github.com/Sarthak2661/Truthfit-Resume-AI/issues" rel="noreferrer" target="_blank">Report an issue</a>
+              <a href="mailto:sarthak2661@gmail.com">Contact</a>
+            </nav>
+          </footer>
         </div>
       </body>
     </html>

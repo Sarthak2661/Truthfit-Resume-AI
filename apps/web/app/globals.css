@@ -71,6 +71,8 @@ select {
 }
 
 .shell {
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
 }
 
@@ -144,9 +146,78 @@ select {
 }
 
 .main {
+  flex: 1;
   margin: 0 auto;
   max-width: 1180px;
   padding: 2rem 1.25rem 4rem;
+}
+
+.site-footer {
+  align-items: center;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  display: flex;
+  font-size: 0.86rem;
+  gap: 1rem;
+  justify-content: space-between;
+  margin: 0 auto;
+  max-width: 1180px;
+  padding: 1.35rem 1.25rem 1.75rem;
+  width: 100%;
+}
+
+.site-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.site-footer a:hover,
+.legal-page a,
+.analysis-consent a,
+.auth-consent a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 0.18rem;
+}
+
+.legal-page {
+  margin-inline: auto;
+  max-width: 52rem;
+}
+
+.legal-page > h1 {
+  font-size: clamp(2.2rem, 6vw, 4rem);
+  line-height: 1.05;
+  margin: 0.6rem 0 0.8rem;
+}
+
+.legal-updated {
+  color: var(--muted);
+  margin-bottom: 2.5rem;
+}
+
+.legal-page section {
+  border-top: 1px solid var(--line);
+  padding: 1.4rem 0;
+}
+
+.legal-page section h2 {
+  font-size: 1.15rem;
+  margin: 0 0 0.45rem;
+}
+
+.legal-page section p,
+.legal-contact {
+  color: var(--muted);
+  line-height: 1.75;
+  margin: 0;
+}
+
+.legal-contact {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1rem;
 }
 
 .hero {
@@ -336,7 +407,7 @@ select {
 }
 
 .grid.four {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .grid.five {
@@ -419,14 +490,18 @@ select {
 }
 
 .button {
+  align-items: center;
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
   border: 0;
   border-radius: 0.85rem;
   color: white;
   cursor: pointer;
+  display: inline-flex;
   font-weight: 800;
+  justify-content: center;
   min-height: 2.9rem;
   padding: 0.75rem 1rem;
+  text-align: center;
 }
 
 .button.secondary {
@@ -962,6 +1037,29 @@ select {
   flex: 0 0 auto;
 }
 
+.analysis-heading-row {
+  flex-wrap: wrap;
+}
+
+.analysis-heading-row > :first-child {
+  flex: 1 1 44rem;
+  min-width: 0;
+}
+
+.button-row {
+  align-items: stretch;
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.button-row .button {
+  min-width: 8.25rem;
+  white-space: nowrap;
+}
+
 .text-link {
   color: var(--accent);
   font-size: 0.9rem;
@@ -1347,6 +1445,24 @@ html[data-theme="dark"] .success {
   }
 
   .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .analysis-heading-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .analysis-heading-row > :first-child {
+    flex-basis: auto;
+  }
+
+  .analysis-heading-row .button-row {
+    justify-content: flex-start;
+  }
+
+  .site-footer {
     align-items: flex-start;
     flex-direction: column;
   }

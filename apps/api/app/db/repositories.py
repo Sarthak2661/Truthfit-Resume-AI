@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import delete, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from apps.api.app.db.models import AgentEvent, AnalysisRun, Evidence, Job, Resume, SkillGap, User
@@ -21,8 +22,14 @@ def get_or_create_user(session: Session, auth_subject: str, email: str = "") -> 
         return user
 
     user = User(auth_subject=clean_subject, email=email.strip().lower())
-    session.add(user)
-    session.flush()
+    try:
+        with session.begin_nested():
+            session.add(user)
+            session.flush()
+    except IntegrityError:
+        user = session.scalar(select(User).where(User.auth_subject == clean_subject))
+        if user is None:
+            raise
     return user
 
 
@@ -146,6 +153,18 @@ def get_analysis_run_by_idempotency_key(
             AnalysisRun.user_id == user_id,
             AnalysisRun.idempotency_key == idempotency_key,
         )
+    )
+
+
+def count_analysis_runs_since(session: Session, user_id: str, since: datetime) -> int:
+    return int(
+        session.scalar(
+            select(func.count()).select_from(AnalysisRun).where(
+                AnalysisRun.user_id == user_id,
+                AnalysisRun.created_at >= since,
+            )
+        )
+        or 0
     )
 
 

@@ -1,11 +1,12 @@
 "use client";
 
 import HCaptcha from "@hcaptcha/react-hcaptcha";
-import { FormEvent, useRef, useState } from "react";
+import Link from "next/link";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
 import { createClient } from "../../lib/supabase/client";
 
-type AuthMode = "sign-in" | "create-account";
+type AuthMode = "sign-in" | "create-account" | "forgot-password";
 
 export default function LoginPage() {
   const [mode, setMode] = useState<AuthMode>("sign-in");
@@ -19,6 +20,16 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const captchaRef = useRef<HCaptcha>(null);
   const captchaSiteKey = process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY?.trim() ?? "";
+
+  useEffect(() => {
+    const authError = new URLSearchParams(window.location.search).get("error");
+    if (authError === "expired_link") {
+      setMode("forgot-password");
+      setMessage("This email link has expired or was already used. Request a new reset link.");
+    } else if (authError === "confirmation_failed") {
+      setMessage("The email confirmation link is invalid or expired. Try signing in or create the account again.");
+    }
+  }, []);
 
   function resetCaptcha() {
     captchaRef.current?.resetCaptcha();
@@ -124,27 +135,65 @@ export default function LoginPage() {
     }
   }
 
+  async function requestPasswordReset() {
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) {
+      setMessage("Enter your email address.");
+      return;
+    }
+    if (captchaSiteKey && !captchaToken) {
+      setMessage("Complete the CAPTCHA verification before requesting a reset link.");
+      return;
+    }
+
+    setLoading(true);
+    setMessage("");
+    try {
+      const { error } = await createClient().auth.resetPasswordForEmail(normalizedEmail, {
+        captchaToken: captchaToken || undefined,
+        redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+      });
+      if (error) {
+        setMessage(error.message);
+        return;
+      }
+      setMessage("Check your email for a password reset link.");
+    } catch {
+      setMessage("The reset request could not reach the authentication service. Try again.");
+    } finally {
+      setLoading(false);
+      resetCaptcha();
+    }
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (mode === "create-account") {
       await createAccount();
       return;
     }
+    if (mode === "forgot-password") {
+      await requestPasswordReset();
+      return;
+    }
     await signIn();
   }
 
   const creatingAccount = mode === "create-account";
+  const resettingPassword = mode === "forgot-password";
 
   return (
     <section className="auth-page">
       <form className={`card auth-card ${creatingAccount ? "auth-card-wide" : ""}`} onSubmit={submit}>
         <div className="auth-heading">
           <div className="section-label">Secure workspace</div>
-          <h1>{creatingAccount ? "Create your TruthFit account" : "Sign in to TruthFit"}</h1>
+          <h1>{creatingAccount ? "Create your TruthFit account" : resettingPassword ? "Reset your password" : "Sign in to TruthFit"}</h1>
           <p className="muted">
             {creatingAccount
               ? "Keep your resume reviews and tracked applications private to your account."
-              : "Your analyses and tracked jobs are visible only to your account."}
+              : resettingPassword
+                ? "We will send a secure reset link to your account email."
+                : "Your analyses and tracked jobs are visible only to your account."}
           </p>
         </div>
 
@@ -160,7 +209,7 @@ export default function LoginPage() {
           <input autoComplete="email" className="input" onChange={(event) => setEmail(event.target.value)} required type="email" value={email} />
         </label>
 
-        <div className={creatingAccount ? "auth-password-grid" : ""}>
+        {!resettingPassword ? <div className={creatingAccount ? "auth-password-grid" : ""}>
           <label className="field">
             <span>Password</span>
             <input
@@ -179,12 +228,12 @@ export default function LoginPage() {
               <input autoComplete="new-password" className="input" minLength={8} onChange={(event) => setConfirmPassword(event.target.value)} required type="password" value={confirmPassword} />
             </label>
           ) : null}
-        </div>
+        </div> : null}
 
         {creatingAccount ? (
           <label className="auth-consent">
             <input checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} required type="checkbox" />
-            <span>I agree to the Terms of Use and Privacy Notice.</span>
+            <span>I agree to the <Link href="/terms">Terms of Use</Link> and <Link href="/privacy">Privacy Notice</Link>.</span>
           </label>
         ) : null}
 
@@ -197,13 +246,21 @@ export default function LoginPage() {
         ) : null}
 
         <button className="button" disabled={loading} type="submit">
-          {loading ? (creatingAccount ? "Creating account..." : "Signing in...") : creatingAccount ? "Create account" : "Sign in"}
+          {loading
+            ? creatingAccount ? "Creating account..." : resettingPassword ? "Sending reset link..." : "Signing in..."
+            : creatingAccount ? "Create account" : resettingPassword ? "Send reset link" : "Sign in"}
         </button>
 
+        {!creatingAccount && !resettingPassword ? (
+          <button className="auth-switch-button" disabled={loading} onClick={() => changeMode("forgot-password")} type="button">
+            Forgot password?
+          </button>
+        ) : null}
+
         <div className="auth-switch">
-          <span>{creatingAccount ? "Already have an account?" : "New to TruthFit?"}</span>
-          <button className="auth-switch-button" disabled={loading} onClick={() => changeMode(creatingAccount ? "sign-in" : "create-account")} type="button">
-            {creatingAccount ? "Sign in" : "Create account"}
+          <span>{creatingAccount || resettingPassword ? "Return to your account" : "New to TruthFit?"}</span>
+          <button className="auth-switch-button" disabled={loading} onClick={() => changeMode(creatingAccount || resettingPassword ? "sign-in" : "create-account")} type="button">
+            {creatingAccount || resettingPassword ? "Sign in" : "Create account"}
           </button>
         </div>
 

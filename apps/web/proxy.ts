@@ -4,7 +4,14 @@ import { NextResponse, type NextRequest } from "next/server";
 import { supabasePublicConfig } from "./lib/supabase/config";
 import { e2eAuthBypassEnabled } from "./lib/e2e-auth";
 
-const PUBLIC_PATHS = new Set(["/", "/login", "/auth/callback"]);
+const PUBLIC_PATHS = new Set([
+  "/",
+  "/login",
+  "/reset-password",
+  "/auth/callback",
+  "/privacy",
+  "/terms",
+]);
 
 export async function proxy(request: NextRequest) {
   if (e2eAuthBypassEnabled()) {

@@ -32,6 +32,7 @@ The first seven security and reliability phases of the Next.js/FastAPI product p
 | LLM Phase 4: boundary and schema hardening | Complete | Strict nested Pydantic contracts, generated JSON Schema, fail-closed provider validation, untrusted-document delimiters, and malformed-output and prompt-injection tests. |
 | API Phase 5: hardening and scale | Complete | Streamed upload limits, request deadlines, Redis-backed production rate limits, trusted hosts, security headers, bounded pagination, idempotent analysis creation, and SQL-backed skill-gap aggregation. |
 | Verification Phase 6: production checks | Complete | PostgreSQL service-container tests, Playwright product journeys, bounded load scenarios, adversarial security tests, and versioned LLM evaluation fixtures. |
+| Public-beta readiness | Complete | Privacy and terms pages, password recovery, explicit provider-processing consent, support links, scheduled retention cleanup, uptime checks, and per-account daily analysis quotas. |
 
 Supabase stores login identities in its managed `auth.users` table, visible under **Authentication > Users**. TruthFit stores its application user record and owned analyses in the database selected by `DATABASE_URL`. A local `DATABASE_URL` therefore keeps application tables in local PostgreSQL even though authentication is handled by Supabase.
 
@@ -104,6 +105,9 @@ For the detailed current architecture, target v2 architecture, migration plan, a
 - Accept, edit, reject, and copy evidence-grounded bullet rewrites in the Next.js tailoring workflow.
 - Save completed analyses to an API-backed Kanban tracker with role, company, location, score, notes, status, and a link back to the review.
 - Create an account or sign in with Supabase Auth; dashboard, analysis, tailoring, and tracker records are isolated by the verified account identity.
+- Recover forgotten passwords through Supabase email recovery and review public Privacy and Terms pages before creating an account.
+- Require explicit analysis consent before redacted resume and job text is sent to a selected provider.
+- Enforce a configurable daily analysis allowance per account to protect server-managed provider usage.
 - Use a no-API sample report so reviewers can explore the product without adding an API key.
 
 Safe demo inputs are included in [`samples/sample_resume.txt`](samples/sample_resume.txt) and [`samples/sample_job_description.txt`](samples/sample_job_description.txt). They are fictional and safe to use when testing the deployed app.
@@ -126,6 +130,8 @@ TruthFit applies best-effort redaction before resume preview, proof mapping, and
 The Streamlit app does not save uploaded resume and job-description files. It uses session text for analysis and stores local tracker data when an entry is saved. Completed FastAPI analyses store redacted resume text by default, plus JD text, the structured result, evidence records, and operational events. Original resume text remains transient unless the account explicitly enables encrypted retention. Parse-only API requests are not persisted. See [API storage and access boundaries](docs/api.md#storage-and-access-boundaries).
 
 The redaction heuristic is covered by tests against several realistic resume-header layouts across US, India, UK, and GCC-style contact formats. The current fixture set redacts all checked sensitive tokens, but this is still a test-sample result, not a guarantee for every resume design.
+
+The Next.js product publishes plain-language [Privacy](apps/web/app/privacy/page.tsx) and [Terms](apps/web/app/terms/page.tsx) pages. The analysis form requires a separate consent acknowledgement before provider processing. Account settings show stored-data counts, retention information, and daily analysis usage.
 
 ### Resume Evidence Score
 
@@ -458,7 +464,7 @@ TruthFit now includes the Streamlit v1 baseline and a locally verified Next.js/F
 
 ### 1. Security and User-Scoped History
 
-Phases 0-6 now cover production configuration, account ownership, durable analysis state, redacted-only storage, optional encrypted retention, user-controlled deletion, rate limits, hostile-input tests, and cross-account authorization checks. The next security work is managed provider quotas, key rotation, audit trails, alerting, and an external security review before broad public use.
+Phases 0-6 now cover production configuration, account ownership, durable analysis state, redacted-only storage, optional encrypted retention, user-controlled deletion, rate limits, hostile-input tests, and cross-account authorization checks. Public-beta controls add per-account provider quotas, scheduled cleanup, uptime checks, recovery flows, and explicit processing consent. The next security work is key rotation, stronger audit trails, centralized alerting, and an external security review before broad public use.
 
 ### 2. Persistent Resume Versions and Export
 

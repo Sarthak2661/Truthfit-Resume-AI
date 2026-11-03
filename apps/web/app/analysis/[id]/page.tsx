@@ -310,7 +310,7 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
 
     return (
       <section className="section">
-        <div className="page-heading-row" id="overview">
+        <div className="page-heading-row analysis-heading-row" id="overview">
           <div>
             <div className="section-label">Fit review</div>
             <h1>{summary.headline || "Resume analysis"}</h1>

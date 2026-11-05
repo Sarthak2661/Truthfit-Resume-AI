@@ -12,7 +12,7 @@ requests==2.34.2
 bleach==6.3.0
 google-genai==2.8.0
 pandas==3.0.3
-plotly==6.8.0
+plotly==7.1.0
 pydantic==2.13.4
 PyJWT==2.15.1
 cryptography==50.0.2

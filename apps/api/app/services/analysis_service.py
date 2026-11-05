@@ -11,6 +11,7 @@ from apps.api.app.auth import CurrentUser
 from apps.api.app.config import daily_analysis_quota
 from apps.api.app.errors import AnalysisQuotaExceededError, ResourceNotFoundError
 from apps.api.app.schemas import (
+    ANALYSIS_CONSENT_VERSION,
     AnalysisListItem,
     AnalysisListResponse,
     AnalysisRunRequest,
@@ -26,11 +27,13 @@ from apps.api.app.schemas import (
     TrackerUpdateRequest,
 )
 from source.ai.llm_client import generate_resume_analysis
+from source.ai.prompts import PROMPT_VERSION
+from source.ai.schemas import ANALYSIS_SCHEMA_VERSION
 from source.ai.errors import ProviderError, public_provider_message
 from source.ai.providers import PROVIDER_MODELS
 from source.ai.schemas import validate_analysis_result
 from source.services.evidence_score import add_resume_evidence_score
-from source.services.observability import log_warning, timed_operation
+from source.services.observability import log_event, log_warning, timed_operation
 from source.services.resume_heatmap import redact_personal_details
 from source.services.privacy_storage import encrypt_retained_text
 from source.services.url_utils import is_valid_http_url, normalize_http_url
@@ -60,21 +63,24 @@ def create_pending_analysis(
                 email=current_user.email,
             )
             if idempotency_key:
-                existing = repositories.get_analysis_run_by_idempotency_key(
-                    session, user.id, idempotency_key
-                )
+                existing = repositories.get_analysis_run_by_idempotency_key(session, user.id, idempotency_key)
                 if existing:
                     _ensure_matching_idempotent_request(existing, request_fingerprint)
                     return _analysis_run_response(existing, request_id, replayed=True)
 
             now = datetime.now(timezone.utc)
             start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
-            used = repositories.count_analysis_runs_since(session, user.id, start_of_day)
             limit = daily_analysis_quota()
-            if used >= limit:
+            used = repositories.consume_daily_analysis_quota(
+                session,
+                user.id,
+                now.date(),
+                limit,
+            )
+            if used is None:
                 next_day = start_of_day + timedelta(days=1)
                 retry_after = max(1, int((next_day - now).total_seconds()))
-                raise AnalysisQuotaExceededError(limit, used, retry_after)
+                raise AnalysisQuotaExceededError(limit, limit, retry_after)
 
             resume = repositories.create_resume(
                 session=session,
@@ -102,6 +108,10 @@ def create_pending_analysis(
                 model=model,
                 idempotency_key=idempotency_key,
                 request_fingerprint=request_fingerprint,
+                prompt_version=PROMPT_VERSION,
+                schema_version=ANALYSIS_SCHEMA_VERSION,
+                consent_version=(ANALYSIS_CONSENT_VERSION if payload.analysis_consent else None),
+                consented_at=now if payload.analysis_consent else None,
             )
             repositories.add_agent_event(
                 session=session,
@@ -119,9 +129,7 @@ def create_pending_analysis(
                 auth_subject=current_user.subject,
                 email=current_user.email,
             )
-            existing = repositories.get_analysis_run_by_idempotency_key(
-                session, user.id, idempotency_key
-            )
+            existing = repositories.get_analysis_run_by_idempotency_key(session, user.id, idempotency_key)
             if existing:
                 _ensure_matching_idempotent_request(existing, request_fingerprint)
                 return _analysis_run_response(existing, request_id, replayed=True)
@@ -188,7 +196,7 @@ def process_analysis_run(run_id: str, payload_data: dict, request_id: str) -> No
             provider=payload.provider,
             model=payload.model or PROVIDER_MODELS[payload.provider][0],
         ):
-            analysis = generate_resume_analysis(
+            generation = generate_resume_analysis(
                 resume_text=redact_personal_details(payload.resume_text),
                 job_description=_regional_job_context(payload.job_description, payload.target_region),
                 include_cover_letter=payload.include_cover_letter,
@@ -196,12 +204,25 @@ def process_analysis_run(run_id: str, payload_data: dict, request_id: str) -> No
                 provider=payload.provider,
                 model=payload.model or PROVIDER_MODELS[payload.provider][0],
                 api_key=payload.api_key,
+                with_metadata=True,
             )
+
+        if isinstance(generation, dict) and isinstance(generation.get("analysis"), dict):
+            analysis = generation["analysis"]
+            usage = generation.get("usage") or {}
+        else:
+            analysis = generation
+            usage = {}
 
         normalized = _finalize_analysis(analysis, payload.job_link)
         if payload.resume_formatting_checks:
             normalized["ats_formatting_checks"] = payload.resume_formatting_checks
         normalized.setdefault("job_details", {})["target_region"] = payload.target_region
+        normalized["analysis_metadata"] = {
+            "prompt_version": PROMPT_VERSION,
+            "schema_version": ANALYSIS_SCHEMA_VERSION,
+            **usage,
+        }
         latency_ms = int((perf_counter() - started_at) * 1000)
 
         with session_scope() as session:
@@ -216,7 +237,22 @@ def process_analysis_run(run_id: str, payload_data: dict, request_id: str) -> No
                 agent_name="analysis",
                 status="completed",
                 latency_ms=latency_ms,
+                input_tokens=usage.get("input_tokens"),
+                output_tokens=usage.get("output_tokens"),
+                estimated_cost_micros=usage.get("estimated_cost_micros"),
             )
+        log_event(
+            "analysis_usage_recorded",
+            request_id=request_id,
+            run_id=run_id,
+            provider=payload.provider,
+            model=usage.get("actual_model") or payload.model,
+            input_tokens=usage.get("input_tokens"),
+            output_tokens=usage.get("output_tokens"),
+            estimated_cost_micros=usage.get("estimated_cost_micros"),
+            prompt_version=PROMPT_VERSION,
+            schema_version=ANALYSIS_SCHEMA_VERSION,
+        )
     except ProviderError as exc:
         _record_analysis_failure(run_id, exc.code, public_provider_message(exc), started_at)
         log_warning(
@@ -447,7 +483,9 @@ def _tracker_item(run) -> TrackerItem:
     return TrackerItem(
         run_id=run.id,
         role=(run.job.title if run.job else "") or job_details.get("job_title") or "Untitled role",
-        company=(run.job.company if run.job else "") or job_details.get("company_name") or "Company not specified",
+        company=(run.job.company if run.job else "")
+        or job_details.get("company_name")
+        or "Company not specified",
         location=str(job_details.get("location_or_work_policy") or ""),
         job_link=job_link,
         match_score=run.overall_score,
@@ -478,7 +516,9 @@ def _top_fixes(analysis: dict) -> list[str]:
     top_fixes = []
     for item in fixes[:3]:
         if isinstance(item, dict):
-            top_fixes.append(str(item.get("fix") or item.get("recommendation") or item.get("issue") or "Recommended fix"))
+            top_fixes.append(
+                str(item.get("fix") or item.get("recommendation") or item.get("issue") or "Recommended fix")
+            )
         else:
             top_fixes.append(str(item))
     return top_fixes
@@ -545,7 +585,9 @@ def _resume_versions(runs) -> list[dict]:
                 "company": company,
                 "resume_file_name": latest_file_name,
                 "latest_resume_file_name": latest_file_name,
-                "previous_resume_file_name": previous.resume.file_name if previous and previous.resume else "",
+                "previous_resume_file_name": previous.resume.file_name
+                if previous and previous.resume
+                else "",
                 "runs": len(items),
                 "latest_score": latest.overall_score,
                 "best_score": max(item.overall_score for item in items),

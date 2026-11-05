@@ -94,10 +94,13 @@ def test_protected_routes_require_authentication(tmp_path):
     assert api.get("/analysis").status_code == 401
     assert api.get("/dashboard/summary").status_code == 401
     assert api.get("/tracker").status_code == 401
-    assert api.post(
-        "/resumes/parse",
-        files={"file": ("resume.txt", b"Python SQL", "text/plain")},
-    ).status_code == 401
+    assert (
+        api.post(
+            "/resumes/parse",
+            files={"file": ("resume.txt", b"Python SQL", "text/plain")},
+        ).status_code
+        == 401
+    )
 
 
 def test_parse_resume_redacts_personal_details(tmp_path):
@@ -448,9 +451,7 @@ def test_provider_failure_is_persisted_as_failed_run(monkeypatch, tmp_path):
     assert summary["completed_runs"] == 0
     with session_scope() as session:
         events = list(
-            session.scalars(
-                select(AgentEvent).where(AgentEvent.analysis_run_id == created.json()["run_id"])
-            )
+            session.scalars(select(AgentEvent).where(AgentEvent.analysis_run_id == created.json()["run_id"]))
         )
     assert {event.status for event in events} == {"pending", "processing", "failed"}
     failed_event = next(event for event in events if event.status == "failed")
@@ -514,9 +515,7 @@ def test_client_cannot_choose_record_owner(monkeypatch, tmp_path):
     assert response.status_code == 422
 
 
-def test_daily_analysis_quota_blocks_new_runs_but_allows_idempotent_replay(
-    monkeypatch, tmp_path
-):
+def test_daily_analysis_quota_blocks_new_runs_but_allows_idempotent_replay(monkeypatch, tmp_path):
     from apps.api.app.services import analysis_service
 
     monkeypatch.setenv("TRUTHFIT_DAILY_ANALYSIS_QUOTA", "1")
@@ -544,6 +543,57 @@ def test_daily_analysis_quota_blocks_new_runs_but_allows_idempotent_replay(
     assert blocked.status_code == 429
     assert blocked.headers["retry-after"]
     assert "daily analysis limit" in blocked.json()["detail"].lower()
+
+
+def test_analysis_records_consent_versions_and_provider_usage(monkeypatch, tmp_path):
+    from sqlalchemy import select
+
+    from apps.api.app.db.database import session_scope
+    from apps.api.app.db.models import AgentEvent, AnalysisRun
+    from apps.api.app.services import analysis_service
+
+    monkeypatch.setattr(
+        analysis_service,
+        "generate_resume_analysis",
+        lambda **_: {
+            "analysis": sample_analysis(),
+            "usage": {
+                "provider": "Gemini",
+                "requested_model": "gemini-3.8-flash",
+                "actual_model": "gemini-3.8-flash",
+                "input_tokens": 120,
+                "output_tokens": 80,
+                "estimated_cost_micros": 15,
+            },
+        },
+    )
+    api = client(tmp_path)
+    response = api.post(
+        "/analysis/run",
+        json={
+            "resume_text": "Python ETL SQL",
+            "job_description": "Data Engineer with Python and SQL",
+            "provider": "Gemini",
+            "model": "gemini-3.8-flash",
+            "analysis_consent": True,
+            "consent_version": "2026-11-04",
+        },
+    )
+
+    assert response.status_code == 202
+    with session_scope() as session:
+        run = session.scalar(select(AnalysisRun))
+        completed = session.scalar(select(AgentEvent).where(AgentEvent.status == "completed"))
+        assert run is not None
+        assert run.prompt_version == "2026-11-04"
+        assert run.schema_version == "v1"
+        assert run.consent_version == "2026-11-04"
+        assert run.consented_at is not None
+        assert run.result_json["analysis_metadata"]["actual_model"] == "gemini-3.8-flash"
+        assert completed is not None
+        assert completed.input_tokens == 120
+        assert completed.output_tokens == 80
+        assert completed.estimated_cost_micros == 15
 
 
 def test_cross_user_analysis_and_tracker_access_returns_404(monkeypatch, tmp_path):

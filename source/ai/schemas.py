@@ -8,6 +8,7 @@ Priority = Literal["Important", "Would help", "Nice to have"]
 RequirementStatus = Literal["Supported", "Partial", "Missing"]
 EvidenceStatus = Literal["Supported", "Partial", "Missing", "Unsafe"]
 MatchStrength = Literal["Strong", "Partial", "Weak"]
+ANALYSIS_SCHEMA_VERSION = "v1"
 
 
 class StrictModel(BaseModel):
@@ -318,6 +319,19 @@ class TrackerState(StrictModel):
     saved: bool = False
 
 
+class AnalysisMetadata(StrictModel):
+    prompt_version: str = ""
+    schema_version: str = ""
+    provider: str = ""
+    requested_model: str = ""
+    actual_model: str = ""
+    input_tokens: int | None = Field(default=None, ge=0)
+    output_tokens: int | None = Field(default=None, ge=0)
+    estimated_cost_micros: int | None = Field(default=None, ge=0)
+    prompt_chars: int | None = Field(default=None, ge=0)
+    response_chars: int | None = Field(default=None, ge=0)
+
+
 class AnalysisResultModel(LLMAnalysisResultModel):
     job_details: JobDetails = Field(default_factory=JobDetails)
     scores: ScoreModel = Field(default_factory=ScoreModel)
@@ -345,6 +359,7 @@ class AnalysisResultModel(LLMAnalysisResultModel):
     resume_evidence_summary: ResumeEvidenceSummary | None = None
     ats_formatting_checks: list[AtsFormattingCheck] = Field(default_factory=list)
     tracker: TrackerState | None = None
+    analysis_metadata: AnalysisMetadata | None = None
 
 
 def analysis_json_schema() -> dict:

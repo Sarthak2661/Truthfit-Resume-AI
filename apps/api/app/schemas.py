@@ -4,6 +4,10 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from source.ai.providers import PROVIDER_MODELS
+from apps.api.app.config import runtime_environment
+
+
+ANALYSIS_CONSENT_VERSION = "2026-11-04"
 
 
 class HealthResponse(BaseModel):
@@ -67,6 +71,8 @@ class AnalysisRunRequest(BaseModel):
     resume_formatting_checks: list[dict[str, Any]] = Field(default_factory=list)
     target_region: str = "US"
     retain_original_resume: bool = False
+    analysis_consent: bool = False
+    consent_version: str = ANALYSIS_CONSENT_VERSION
 
     @field_validator("provider")
     @classmethod
@@ -93,6 +99,10 @@ class AnalysisRunRequest(BaseModel):
                 f"Unsupported model for {self.provider}: {self.model}. "
                 f"Choose one of: {', '.join(supported_models)}"
             )
+        if runtime_environment() == "production" and not self.analysis_consent:
+            raise ValueError("Analysis consent is required before provider processing.")
+        if self.analysis_consent and self.consent_version != ANALYSIS_CONSENT_VERSION:
+            raise ValueError("Analysis consent version is not current. Refresh and try again.")
         return self
 
 

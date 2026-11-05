@@ -4,7 +4,7 @@ import re
 from pydantic import ValidationError
 
 from source.ai.prompts import build_resume_analysis_prompt
-from source.ai.providers import LLMConfig, call_llm_with_retry
+from source.ai.providers import LLMConfig, ProviderResponse, call_llm_with_retry
 from source.ai.errors import ProviderError, ProviderResponseError
 from source.ai.schemas import validate_llm_analysis_result
 from source.services.observability import log_warning, new_request_id, timed_operation
@@ -34,6 +34,7 @@ def generate_resume_analysis(
     provider: str = "Gemini",
     model: str = "gemini-3.8-flash",
     api_key: str = "",
+    with_metadata: bool = False,
 ) -> dict:
     request_id = new_request_id()
     resume_text = resume_text[:8000]
@@ -58,11 +59,34 @@ def generate_resume_analysis(
             project_chars=len(user_projects),
             cover_letter=include_cover_letter,
         ):
-            output_text = call_llm_with_retry(
+            provider_response = call_llm_with_retry(
                 prompt,
                 LLMConfig(provider=provider, model=model, api_key=api_key),
+                include_usage=True,
             )
-        return validate_llm_analysis_result(extract_json(output_text))
+        if isinstance(provider_response, str):
+            provider_response = ProviderResponse(
+                text=provider_response,
+                provider=provider,
+                requested_model=model,
+                actual_model=model,
+            )
+        analysis = validate_llm_analysis_result(extract_json(provider_response.text))
+        if not with_metadata:
+            return analysis
+        return {
+            "analysis": analysis,
+            "usage": {
+                "provider": provider_response.provider,
+                "requested_model": provider_response.requested_model,
+                "actual_model": provider_response.actual_model,
+                "input_tokens": provider_response.input_tokens,
+                "output_tokens": provider_response.output_tokens,
+                "estimated_cost_micros": provider_response.estimated_cost_micros,
+                "prompt_chars": len(prompt),
+                "response_chars": len(provider_response.text),
+            },
+        }
 
     except json.JSONDecodeError as exc:
         log_warning(

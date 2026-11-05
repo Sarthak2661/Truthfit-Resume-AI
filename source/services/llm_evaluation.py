@@ -9,9 +9,7 @@ def evaluate_result(case: dict, analysis: dict) -> list[str]:
         value = scores.get(score_name)
         minimum, maximum = bounds
         if not isinstance(value, (int, float)) or not minimum <= value <= maximum:
-            failures.append(
-                f"{score_name}={value!r} is outside expected range {minimum}-{maximum}"
-            )
+            failures.append(f"{score_name}={value!r} is outside expected range {minimum}-{maximum}")
 
     evidence_text = " ".join(_evidence_strings(analysis)).casefold()
     for term in expected.get("required_evidence_terms", []):
@@ -20,6 +18,31 @@ def evaluate_result(case: dict, analysis: dict) -> list[str]:
     for term in expected.get("forbidden_claim_terms", []):
         if str(term).casefold() in evidence_text:
             failures.append(f"forbidden unsupported claim found: {term}")
+
+    missing_skills = {
+        str(item.get("skill") or "").casefold()
+        for item in analysis.get("skills_analysis", {}).get("missing_skills", [])
+        if isinstance(item, dict)
+    }
+    for skill in expected.get("required_missing_skills", []):
+        if str(skill).casefold() not in missing_skills:
+            failures.append(f"required missing skill was not flagged: {skill}")
+
+    guardrail_text = " ".join(
+        str(item.get("claim_or_skill") or item.get("evidence") or "")
+        for item in analysis.get("hallucination_guardrail", [])
+        if isinstance(item, dict)
+    ).casefold()
+    for term in expected.get("required_guardrail_terms", []):
+        if str(term).casefold() not in guardrail_text:
+            failures.append(f"required guardrail term not found: {term}")
+
+    expected_recommendation = expected.get("apply_recommendation")
+    actual_recommendation = analysis.get("match_summary", {}).get("apply_recommendation")
+    if expected_recommendation and actual_recommendation != expected_recommendation:
+        failures.append(
+            f"apply_recommendation={actual_recommendation!r}; expected {expected_recommendation!r}"
+        )
     return failures
 
 

@@ -87,8 +87,11 @@ The UI layers do not contain the core analysis logic. FastAPI routes call servic
 For the detailed current architecture, target v2 architecture, migration plan, and architecture decisions, see:
 
 - [Architecture](docs/architecture.md)
+- [Two-minute architecture walkthrough](docs/architecture-walkthrough.md)
 - [FastAPI backend](docs/api.md)
 - [Generated analysis schema](docs/analysis-result.schema.json)
+- [Privacy and retention case study](docs/privacy-retention-case-study.md)
+- [Portfolio pitch and GitHub pin copy](docs/portfolio-pitch.md)
 - [Platform roadmap](docs/platform-roadmap.md)
 - [v1 Streamlit baseline](docs/v1-baseline.md)
 - [Architecture decision records](docs/adr/ADR-001-keep-streamlit-v1-as-baseline.md)
@@ -107,7 +110,7 @@ For the detailed current architecture, target v2 architecture, migration plan, a
 - Create an account or sign in with Supabase Auth; dashboard, analysis, tailoring, and tracker records are isolated by the verified account identity.
 - Recover forgotten passwords through Supabase email recovery and review public Privacy and Terms pages before creating an account.
 - Require explicit analysis consent before redacted resume and job text is sent to a selected provider.
-- Enforce a configurable daily analysis allowance per account to protect server-managed provider usage.
+- Enforce an atomic daily analysis allowance per account to protect server-managed provider usage under concurrent traffic.
 - Use a no-API sample report so reviewers can explore the product without adding an API key.
 
 Safe demo inputs are included in [`samples/sample_resume.txt`](samples/sample_resume.txt) and [`samples/sample_job_description.txt`](samples/sample_job_description.txt). They are fictional and safe to use when testing the deployed app.
@@ -401,7 +404,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-The repository now includes unit/API tests, marked security and LLM-evaluation suites, a real PostgreSQL integration test, Playwright browser workflows, TypeScript validation, and a production Next.js build.
+The repository now includes unit/API tests, marked security and LLM-evaluation suites, an eight-case versioned evaluation baseline, a real PostgreSQL integration test, Playwright browser workflows, TypeScript validation, and a production Next.js build.
 
 ### Continuous Integration
 
@@ -443,6 +446,23 @@ This diagram describes the **future public Next.js product deployment**, not the
 
 Keep provider keys out of the repository. The current portfolio flow supports user-provided keys; a production service should use controlled server-side keys with authentication, rate limits, and usage caps.
 
+Durable API environments require the database to match the Alembic head revision and refuse to start on schema drift. Apply migrations before each release:
+
+```bash
+alembic upgrade head
+```
+
+Run the PostgreSQL backup/restore drill before production releases and after material schema changes:
+
+```bash
+python scripts/verify_backup_restore.py
+```
+
+The runtime database role should remain least-privileged. If it cannot create the isolated
+verification database, provide a temporary administrative connection through
+`TRUTHFIT_ADMIN_DATABASE_URL`, run the drill, and then remove that variable. Passwords are passed
+to PostgreSQL tools through `PGPASSWORD` and are not included in command arguments.
+
 See [DEPLOYMENT.md](DEPLOYMENT.md) for deployment steps.
 
 ## Limitations
@@ -464,7 +484,7 @@ TruthFit now includes the Streamlit v1 baseline and a locally verified Next.js/F
 
 ### 1. Security and User-Scoped History
 
-Phases 0-6 now cover production configuration, account ownership, durable analysis state, redacted-only storage, optional encrypted retention, user-controlled deletion, rate limits, hostile-input tests, and cross-account authorization checks. Public-beta controls add per-account provider quotas, scheduled cleanup, uptime checks, recovery flows, and explicit processing consent. The next security work is key rotation, stronger audit trails, centralized alerting, and an external security review before broad public use.
+Phases 0-6 now cover production configuration, account ownership, durable analysis state, redacted-only storage, optional encrypted retention, user-controlled deletion, rate limits, hostile-input tests, and cross-account authorization checks. Public-beta controls add atomic per-account provider quotas, versioned consent records, prompt/schema provenance, scheduled cleanup, uptime checks, and recovery flows. The next security work is key rotation, centralized alerting, and an external security review before broad public use.
 
 ### 2. Persistent Resume Versions and Export
 
@@ -488,7 +508,7 @@ Add managed provider quotas, rate limiting, abuse controls, per-account usage re
 
 ### 7. Evaluation and Score Calibration
 
-Expand the versioned evaluation baseline into a larger reviewed dataset for requirement extraction, evidence precision, unsupported-claim detection, redaction, score calibration, and tailoring safety. Add release-to-release drift reporting rather than relying only on pass/fail ranges.
+Expand the eight-case versioned evaluation baseline into a larger human-reviewed dataset for requirement extraction, evidence precision, unsupported-claim detection, redaction, score calibration, and tailoring safety. Add release-to-release drift reporting rather than relying only on pass/fail ranges.
 
 ### 8. Containerized Deployment and Observability
 

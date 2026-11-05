@@ -8,7 +8,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from apps.api.app.routes import router
 from apps.api.app.config import allowed_cors_origins, trusted_hosts
-from apps.api.app.db.database import init_db
+from apps.api.app.db.database import initialize_database
 from apps.api.app.errors import (
     AnalysisQuotaExceededError,
     ResourceNotFoundError,
@@ -26,7 +26,7 @@ from source.services.observability import log_event, log_warning, new_request_id
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
+    initialize_database()
     yield
 
 
@@ -128,7 +128,9 @@ def create_app() -> FastAPI:
         log_warning("api_request_failed", request_id=request_id, error_type=exc.__class__.__name__)
         return JSONResponse(
             status_code=500,
-            content=ErrorResponse(request_id=request_id, detail="TruthFit could not complete the request.").model_dump(),
+            content=ErrorResponse(
+                request_id=request_id, detail="TruthFit could not complete the request."
+            ).model_dump(),
             headers={"x-request-id": request_id},
         )
 

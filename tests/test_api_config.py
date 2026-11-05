@@ -12,6 +12,7 @@ from apps.api.app.config import (
     supabase_auth_settings,
     trusted_hosts,
 )
+from apps.api.app.schemas import AnalysisRunRequest
 
 
 def test_development_uses_local_cors_origins(monkeypatch):
@@ -35,6 +36,22 @@ def test_production_requires_explicit_trusted_hosts(monkeypatch):
 
     with pytest.raises(RuntimeError, match="TRUTHFIT_TRUSTED_HOSTS is required"):
         trusted_hosts()
+
+
+def test_production_analysis_requires_current_consent(monkeypatch):
+    monkeypatch.setenv("TRUTHFIT_ENV", "production")
+    with pytest.raises(ValueError, match="Analysis consent is required"):
+        AnalysisRunRequest(
+            resume_text="Python and SQL",
+            job_description="Data Engineer",
+        )
+
+    accepted = AnalysisRunRequest(
+        resume_text="Python and SQL",
+        job_description="Data Engineer",
+        analysis_consent=True,
+    )
+    assert accepted.analysis_consent is True
 
 
 def test_numeric_hardening_settings_are_bounded(monkeypatch):

@@ -15,6 +15,7 @@ def valid_provider_result() -> dict:
         "resume_evidence_summary",
         "ats_formatting_checks",
         "tracker",
+        "analysis_metadata",
     ):
         result.pop(runtime_field, None)
     return result
@@ -46,7 +47,7 @@ def test_prompt_treats_document_instructions_as_untrusted_data():
 def test_adversarial_document_cannot_change_application_task(monkeypatch):
     captured = {}
 
-    def fake_call(prompt, _config):
+    def fake_call(prompt, _config, **_kwargs):
         captured["prompt"] = prompt
         return json.dumps(valid_provider_result())
 
@@ -79,7 +80,7 @@ def test_live_analysis_rejects_malformed_provider_structures(monkeypatch, mutate
     mutate(malformed)
     monkeypatch.setattr(
         "source.ai.llm_client.call_llm_with_retry",
-        lambda _prompt, _config: json.dumps(malformed),
+        lambda _prompt, _config, **_kwargs: json.dumps(malformed),
     )
 
     with pytest.raises(ProviderResponseError, match="analysis schema"):

@@ -17,12 +17,11 @@ def inspect_account_data(current_user: CurrentUser) -> AccountDataResponse:
         )
         summary = repositories.account_data_summary(session, user.id)
         now = datetime.now(timezone.utc)
-        start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
         return AccountDataResponse(
             **summary,
             retention_days=retention_days("completed"),
-            daily_analyses_used=repositories.count_analysis_runs_since(
-                session, user.id, start_of_day
+            daily_analyses_used=repositories.daily_analysis_usage_count(
+                session, user.id, now.date()
             ),
             daily_analysis_limit=daily_analysis_quota(),
         )

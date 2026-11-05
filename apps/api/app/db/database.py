@@ -3,11 +3,15 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 
+from alembic.config import Config
+from alembic.runtime.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from apps.api.app.db.models import Base
+from apps.api.app.config import runtime_environment
 
 DEFAULT_DATABASE_URL = "sqlite:///./.truthfit/truthfit.db"
 
@@ -29,9 +33,11 @@ def get_engine() -> Engine:
             if db_path.parent != Path("."):
                 db_path.parent.mkdir(parents=True, exist_ok=True)
 
-        connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
+        connect_args = {"check_same_thread": False, "timeout": 30} if url.startswith("sqlite") else {}
         _engine = create_engine(url, connect_args=connect_args, pool_pre_ping=True)
-        _session_factory = sessionmaker(bind=_engine, autoflush=False, autocommit=False, expire_on_commit=False)
+        _session_factory = sessionmaker(
+            bind=_engine, autoflush=False, autocommit=False, expire_on_commit=False
+        )
 
     return _engine
 
@@ -56,6 +62,39 @@ def session_scope() -> Generator[Session]:
 
 def init_db() -> None:
     Base.metadata.create_all(bind=get_engine())
+
+
+def initialize_database() -> None:
+    """Create disposable SQLite schemas, but require migrations everywhere durable."""
+    url = database_url()
+    if runtime_environment() == "test" or (
+        runtime_environment() == "development" and url.startswith("sqlite")
+    ):
+        init_db()
+        return
+    assert_database_schema_current()
+
+
+def database_revision_status() -> tuple[set[str], set[str]]:
+    project_root = Path(__file__).resolve().parents[4]
+    config = Config(str(project_root / "alembic.ini"))
+    config.set_main_option("script_location", str(project_root / "alembic"))
+    expected = set(ScriptDirectory.from_config(config).get_heads())
+    with get_engine().connect() as connection:
+        current = set(MigrationContext.configure(connection).get_current_heads())
+    return current, expected
+
+
+def assert_database_schema_current() -> None:
+    current, expected = database_revision_status()
+    if current != expected:
+        current_label = ", ".join(sorted(current)) or "unversioned"
+        expected_label = ", ".join(sorted(expected)) or "unknown"
+        raise RuntimeError(
+            "Database schema is not at the expected Alembic revision "
+            f"(current: {current_label}; expected: {expected_label}). "
+            "Run 'alembic upgrade head' before starting the API."
+        )
 
 
 def check_database() -> bool:

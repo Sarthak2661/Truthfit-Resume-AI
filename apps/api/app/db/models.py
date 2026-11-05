@@ -1,7 +1,7 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
 
@@ -29,6 +29,17 @@ class User(Base):
     resumes: Mapped[list["Resume"]] = relationship(back_populates="user")
     jobs: Mapped[list["Job"]] = relationship(back_populates="user")
     analysis_runs: Mapped[list["AnalysisRun"]] = relationship(back_populates="user")
+
+
+class DailyAnalysisUsage(Base):
+    __tablename__ = "daily_analysis_usage"
+    __table_args__ = (UniqueConstraint("user_id", "usage_date", name="uq_daily_analysis_usage_user_date"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    usage_date: Mapped[date] = mapped_column(Date, index=True, nullable=False)
+    used_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
 
 class Resume(Base):
@@ -77,6 +88,10 @@ class AnalysisRun(Base):
     model: Mapped[str] = mapped_column(String(120), nullable=False)
     idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
     request_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    prompt_version: Mapped[str] = mapped_column(String(32), default="v1", nullable=False)
+    schema_version: Mapped[str] = mapped_column(String(32), default="v1", nullable=False)
+    consent_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    consented_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     overall_score: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     result_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
@@ -114,6 +129,9 @@ class AgentEvent(Base):
     status: Mapped[str] = mapped_column(String(50), nullable=False)
     latency_ms: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     error_type: Mapped[str] = mapped_column(String(120), default="", nullable=False)
+    input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    estimated_cost_micros: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
     analysis_run: Mapped[AnalysisRun] = relationship(back_populates="agent_events")

@@ -57,7 +57,7 @@ Status: implemented.
 - Missing skills are stored in normalized rows and aggregated in SQL for the dashboard.
 - The frontend and API require explicit deployed URLs, origins, and hosts.
 
-Operational follow-up: add account-tier quotas, provider-cost budgets, distributed tracing, and load tests against the deployed topology.
+Atomic daily account quotas, prompt/schema version records, provider token usage, and optional configured cost estimates are implemented. Operational follow-up: add account tiers, distributed tracing, and load tests against the deployed topology.
 
 ## Verification Phase 6: Production Verification
 
@@ -67,10 +67,12 @@ Status: implemented in CI and local test tooling.
 - Playwright covers anonymous authorization rejection and the resume upload, JD extraction, analysis, polling, and tracker journey.
 - Bounded concurrent load scenarios cover parsing and analysis submission without calling paid providers.
 - Marked security tests cover IDOR, malformed tokens, oversized uploads, and hostile document instructions.
-- Versioned `evaluations/v1` fixtures define acceptable score ranges, required evidence, and forbidden unsupported claims.
+- Eight versioned `evaluations/v1` fixtures cover role fit, missing proof, eligibility, timeline anomalies, hostile instructions, acceptable score ranges, required evidence, and forbidden unsupported claims.
 - CI and local runtime declarations use Python 3.12.14.
 
 Deployment follow-up: publish the Next.js frontend and FastAPI/RQ services separately from Streamlit, then run the browser and load suites against staging.
+
+Database readiness follow-up is implemented: durable API environments compare the current database revision with Alembic head and fail fast on drift. A backup/restore drill validates core-table counts in an isolated PostgreSQL database.
 
 ## Reliability Phase 2: Analysis Lifecycle
 

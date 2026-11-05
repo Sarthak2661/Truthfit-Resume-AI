@@ -1,9 +1,21 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
+from uuid import uuid4
 from sqlalchemy import delete, func, select
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from apps.api.app.db.models import AgentEvent, AnalysisRun, Evidence, Job, Resume, SkillGap, User
+from apps.api.app.db.models import (
+    AgentEvent,
+    AnalysisRun,
+    DailyAnalysisUsage,
+    Evidence,
+    Job,
+    Resume,
+    SkillGap,
+    User,
+)
 from apps.api.app.config import retention_days
 
 
@@ -82,6 +94,10 @@ def create_analysis_run(
     model: str,
     idempotency_key: str | None = None,
     request_fingerprint: str | None = None,
+    prompt_version: str = "v1",
+    schema_version: str = "v1",
+    consent_version: str | None = None,
+    consented_at: datetime | None = None,
 ) -> AnalysisRun:
     run = AnalysisRun(
         user_id=user_id,
@@ -92,11 +108,60 @@ def create_analysis_run(
         model=model,
         idempotency_key=idempotency_key,
         request_fingerprint=request_fingerprint,
+        prompt_version=prompt_version,
+        schema_version=schema_version,
+        consent_version=consent_version,
+        consented_at=consented_at,
         expires_at=datetime.now(timezone.utc) + timedelta(days=retention_days("pending")),
     )
     session.add(run)
     session.flush()
     return run
+
+
+def consume_daily_analysis_quota(
+    session: Session,
+    user_id: str,
+    usage_date: date,
+    limit: int,
+) -> int | None:
+    """Atomically increment a user's daily usage, returning None at the limit."""
+    values = {
+        "id": uuid4().hex,
+        "user_id": user_id,
+        "usage_date": usage_date,
+        "used_count": 1,
+        "updated_at": datetime.now(timezone.utc),
+    }
+    dialect_name = session.get_bind().dialect.name
+    if dialect_name == "postgresql":
+        statement = postgresql_insert(DailyAnalysisUsage).values(**values)
+    elif dialect_name == "sqlite":
+        statement = sqlite_insert(DailyAnalysisUsage).values(**values)
+    else:
+        raise RuntimeError(f"Atomic quota enforcement is unsupported for {dialect_name}.")
+
+    statement = statement.on_conflict_do_update(
+        index_elements=["user_id", "usage_date"],
+        set_={
+            "used_count": DailyAnalysisUsage.used_count + 1,
+            "updated_at": values["updated_at"],
+        },
+        where=DailyAnalysisUsage.used_count < limit,
+    ).returning(DailyAnalysisUsage.used_count)
+    return session.scalar(statement)
+
+
+def daily_analysis_usage_count(session: Session, user_id: str, usage_date: date) -> int:
+    return int(
+        session.scalar(
+            select(DailyAnalysisUsage.used_count).where(
+                DailyAnalysisUsage.user_id == user_id,
+                DailyAnalysisUsage.usage_date == usage_date,
+            )
+        )
+        or 0
+    )
 
 
 def complete_analysis_run(session: Session, run: AnalysisRun, analysis: dict) -> AnalysisRun:
@@ -159,7 +224,9 @@ def get_analysis_run_by_idempotency_key(
 def count_analysis_runs_since(session: Session, user_id: str, since: datetime) -> int:
     return int(
         session.scalar(
-            select(func.count()).select_from(AnalysisRun).where(
+            select(func.count())
+            .select_from(AnalysisRun)
+            .where(
                 AnalysisRun.user_id == user_id,
                 AnalysisRun.created_at >= since,
             )
@@ -171,22 +238,21 @@ def count_analysis_runs_since(session: Session, user_id: str, since: datetime) -
 def account_data_summary(session: Session, user_id: str) -> dict:
     def count(model) -> int:
         return int(
-            session.scalar(select(func.count()).select_from(model).where(model.user_id == user_id))
-            or 0
+            session.scalar(select(func.count()).select_from(model).where(model.user_id == user_id)) or 0
         )
 
     retained_originals = int(
         session.scalar(
-            select(func.count()).select_from(Resume).where(
+            select(func.count())
+            .select_from(Resume)
+            .where(
                 Resume.user_id == user_id,
                 Resume.original_retained.is_(True),
             )
         )
         or 0
     )
-    oldest = session.scalar(
-        select(func.min(AnalysisRun.created_at)).where(AnalysisRun.user_id == user_id)
-    )
+    oldest = session.scalar(select(func.min(AnalysisRun.created_at)).where(AnalysisRun.user_id == user_id))
     return {
         "analyses": count(AnalysisRun),
         "resumes": count(Resume),
@@ -211,9 +277,7 @@ def delete_analysis_run(session: Session, run: AnalysisRun) -> dict[str, int]:
         select(func.count()).select_from(AnalysisRun).where(AnalysisRun.resume_id == resume_id)
     )
     if not resume_references:
-        deleted_resumes = int(
-            session.execute(delete(Resume).where(Resume.id == resume_id)).rowcount or 0
-        )
+        deleted_resumes = int(session.execute(delete(Resume).where(Resume.id == resume_id)).rowcount or 0)
     job_references = session.scalar(
         select(func.count()).select_from(AnalysisRun).where(AnalysisRun.job_id == job_id)
     )
@@ -231,12 +295,9 @@ def delete_user_data(session: Session, user: User) -> dict[str, int]:
         for key in totals:
             totals[key] += deleted[key]
 
-    totals["resumes"] += int(
-        session.execute(delete(Resume).where(Resume.user_id == user.id)).rowcount or 0
-    )
-    totals["jobs"] += int(
-        session.execute(delete(Job).where(Job.user_id == user.id)).rowcount or 0
-    )
+    totals["resumes"] += int(session.execute(delete(Resume).where(Resume.user_id == user.id)).rowcount or 0)
+    totals["jobs"] += int(session.execute(delete(Job).where(Job.user_id == user.id)).rowcount or 0)
+    session.execute(delete(DailyAnalysisUsage).where(DailyAnalysisUsage.user_id == user.id))
     session.delete(user)
     session.flush()
     return totals
@@ -244,9 +305,7 @@ def delete_user_data(session: Session, user: User) -> dict[str, int]:
 
 def expired_analysis_runs(session: Session, now: datetime | None = None) -> list[AnalysisRun]:
     cutoff = now or datetime.now(timezone.utc)
-    return list(
-        session.scalars(select(AnalysisRun).where(AnalysisRun.expires_at <= cutoff))
-    )
+    return list(session.scalars(select(AnalysisRun).where(AnalysisRun.expires_at <= cutoff)))
 
 
 def add_evidence_records(session: Session, analysis_run_id: str, analysis: dict) -> list[Evidence]:
@@ -292,6 +351,9 @@ def add_agent_event(
     status: str,
     latency_ms: int = 0,
     error_type: str = "",
+    input_tokens: int | None = None,
+    output_tokens: int | None = None,
+    estimated_cost_micros: int | None = None,
 ) -> AgentEvent:
     event = AgentEvent(
         analysis_run_id=analysis_run_id,
@@ -299,6 +361,9 @@ def add_agent_event(
         status=status,
         latency_ms=latency_ms,
         error_type=error_type,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        estimated_cost_micros=estimated_cost_micros,
     )
     session.add(event)
     session.flush()
@@ -356,7 +421,9 @@ def update_tracker_status(
     result = dict(run.result_json or {})
     current_tracker = dict(result.get("tracker") or {})
     now = datetime.now(timezone.utc)
-    resolved_applied_at = applied_at if applied_at is not None else str(current_tracker.get("applied_at") or "")
+    resolved_applied_at = (
+        applied_at if applied_at is not None else str(current_tracker.get("applied_at") or "")
+    )
     if status == "Applied" and not resolved_applied_at:
         resolved_applied_at = now.date().isoformat()
     result["tracker"] = {
@@ -365,7 +432,9 @@ def update_tracker_status(
         "notes": notes if notes or "notes" not in current_tracker else current_tracker.get("notes", ""),
         "priority": priority if priority is not None else str(current_tracker.get("priority") or "Normal"),
         "applied_at": resolved_applied_at,
-        "follow_up_date": follow_up_date if follow_up_date is not None else str(current_tracker.get("follow_up_date") or ""),
+        "follow_up_date": follow_up_date
+        if follow_up_date is not None
+        else str(current_tracker.get("follow_up_date") or ""),
         "updated_at": now.isoformat(),
         "saved": True,
     }
@@ -392,14 +461,14 @@ def list_analysis_runs(
 
 def analysis_counts(session: Session, user_id: str) -> dict[str, int]:
     total = (
-        session.scalar(
-            select(func.count()).select_from(AnalysisRun).where(AnalysisRun.user_id == user_id)
-        )
+        session.scalar(select(func.count()).select_from(AnalysisRun).where(AnalysisRun.user_id == user_id))
         or 0
     )
     completed = (
         session.scalar(
-            select(func.count()).select_from(AnalysisRun).where(
+            select(func.count())
+            .select_from(AnalysisRun)
+            .where(
                 AnalysisRun.user_id == user_id,
                 AnalysisRun.status == "completed",
             )
@@ -408,7 +477,9 @@ def analysis_counts(session: Session, user_id: str) -> dict[str, int]:
     )
     failed = (
         session.scalar(
-            select(func.count()).select_from(AnalysisRun).where(
+            select(func.count())
+            .select_from(AnalysisRun)
+            .where(
                 AnalysisRun.user_id == user_id,
                 AnalysisRun.status == "failed",
             )

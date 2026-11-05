@@ -12,14 +12,13 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 
 def test_versioned_baseline_meets_score_and_evidence_expectations():
     cases = json.loads((ROOT_DIR / "evaluations" / "v1" / "cases.json").read_text("utf-8"))
-    results = json.loads(
-        (ROOT_DIR / "evaluations" / "v1" / "baseline-results.json").read_text("utf-8")
-    )
+    results = json.loads((ROOT_DIR / "evaluations" / "v1" / "baseline-results.json").read_text("utf-8"))
 
     report = evaluate_suite(cases, results)
 
     assert report["version"] == "v1"
     assert report["passed"] is True
+    assert len(report["cases"]) >= 8
 
 
 def test_evaluator_reports_score_drift_and_unsupported_claims():
@@ -33,9 +32,7 @@ def test_evaluator_reports_score_drift_and_unsupported_claims():
     }
     analysis = {
         "scores": {"overall_match_score": 95},
-        "evidence_based_matches": [
-            {"resume_evidence": "Built Kubernetes clusters."}
-        ],
+        "evidence_based_matches": [{"resume_evidence": "Built Kubernetes clusters."}],
     }
 
     failures = evaluate_result(case, analysis)

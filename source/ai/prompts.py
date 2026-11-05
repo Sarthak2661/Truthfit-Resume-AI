@@ -3,6 +3,9 @@ import json
 from source.ai.schemas import analysis_json_schema
 
 
+PROMPT_VERSION = "2026-11-04"
+
+
 def build_resume_analysis_prompt(
     resume_text: str,
     job_description: str,

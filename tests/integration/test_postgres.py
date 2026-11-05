@@ -16,7 +16,7 @@ def test_postgres_migrations_and_repository_round_trip():
 
     with engine.connect() as connection:
         revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-    assert revision == "0004_api_hardening"
+    assert revision == "0005_quality_controls"
 
     subject = f"integration:{uuid4().hex}"
     with session_scope() as session:

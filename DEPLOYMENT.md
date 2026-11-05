@@ -7,7 +7,7 @@ The repo now contains two runnable interfaces:
 - Streamlit v1 at `app.py` is the temporary **Legacy Demo** during the product deployment transition.
 - The Next.js frontend at `apps/web`, backed by FastAPI at `apps/api`, is verified locally and is not served by the Streamlit URL.
 
-The product path includes reliability, ownership, lifecycle, privacy, schema, API-hardening, and production-verification phases. FastAPI validates Supabase access tokens, scopes records to the verified account, stores redacted resume text by default, and moves production provider work to Redis/RQ.
+The product path includes reliability, ownership, lifecycle, privacy, schema, API-hardening, and production-verification phases. FastAPI validates Supabase access tokens, scopes records to the verified account, stores redacted resume text by default, and moves production provider work to Redis/RQ. Durable environments also require the current Alembic head revision before API startup.
 
 ```mermaid
 flowchart LR
@@ -180,6 +180,18 @@ https://your-web-host/auth/callback?next=/reset-password
 Password-reset emails exchange their recovery code through the callback and then open `/reset-password`. Test this flow with a real email address before launch.
 
 Before making this stack public, run the same gates used in CI: PostgreSQL integration tests, Playwright workflows, security regressions, versioned LLM evaluations, and bounded load scenarios. The commands are documented in the README testing section.
+
+Before a production release, apply migrations and verify that a PostgreSQL backup restores into an isolated temporary database:
+
+```powershell
+alembic upgrade head
+python scripts/verify_backup_restore.py
+```
+
+The drill compares row counts for the core account, resume, job, analysis, evidence, and event tables, then removes only the randomly named verification database it created.
+Keep the application role restricted. When that role does not have `CREATEDB`, set
+`TRUTHFIT_ADMIN_DATABASE_URL` to a temporary PostgreSQL admin connection for the drill rather than
+granting database-creation rights to the running application. Remove the variable after the check.
 
 ## Privacy
 

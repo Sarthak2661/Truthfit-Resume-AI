@@ -21,6 +21,12 @@ ALLOWED_LOG_FIELDS = {
     "status",
     "quota_limit",
     "quota_used",
+    "run_id",
+    "input_tokens",
+    "output_tokens",
+    "estimated_cost_micros",
+    "prompt_version",
+    "schema_version",
 }
 
 
@@ -77,9 +83,7 @@ def _format_fields(fields: dict) -> str:
         return ""
 
     clean_fields = {
-        key: value
-        for key, value in fields.items()
-        if value is not None and key in ALLOWED_LOG_FIELDS
+        key: value for key, value in fields.items() if value is not None and key in ALLOWED_LOG_FIELDS
     }
 
     if not clean_fields:

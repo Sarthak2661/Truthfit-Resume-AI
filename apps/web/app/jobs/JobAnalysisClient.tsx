@@ -193,6 +193,8 @@ export function JobAnalysisClient({ providers }: { providers: ProviderInfo[] }) 
         model,
         api_key: apiKey,
         retain_original_resume: retainOriginal,
+        analysis_consent: analysisConsent,
+        consent_version: "2026-11-04",
         resume_formatting_checks: resume?.ats_formatting_checks ?? [],
         target_region: targetRegion,
       };

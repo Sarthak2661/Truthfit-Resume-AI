@@ -1,6 +1,7 @@
 import os
 import time
 import random
+import json
 from dataclasses import dataclass
 
 import requests
@@ -47,6 +48,30 @@ class LLMConfig:
     provider: str = "Gemini"
     model: str = "gemini-3.8-flash"
     api_key: str = ""
+
+
+@dataclass(frozen=True)
+class ProviderResponse:
+    text: str
+    provider: str
+    requested_model: str
+    actual_model: str
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+
+    @property
+    def estimated_cost_micros(self) -> int | None:
+        raw_pricing = (os.getenv("TRUTHFIT_MODEL_PRICING_JSON") or "").strip()
+        if not raw_pricing or self.input_tokens is None or self.output_tokens is None:
+            return None
+        try:
+            pricing = json.loads(raw_pricing).get(self.actual_model, {})
+            input_rate = float(pricing["input_usd_per_million"])
+            output_rate = float(pricing["output_usd_per_million"])
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            return None
+        usd = (self.input_tokens * input_rate + self.output_tokens * output_rate) / 1_000_000
+        return max(0, round(usd * 1_000_000))
 
 
 def provider_names() -> list[str]:
@@ -104,7 +129,7 @@ def is_model_unavailable_error(error: Exception) -> bool:
     return "model" in error_text and any(signal in error_text for signal in unavailable_signals)
 
 
-def _call_gemini(prompt: str, config: LLMConfig) -> str:
+def _call_gemini(prompt: str, config: LLMConfig) -> ProviderResponse:
     api_key = resolve_api_key(config.provider, config.api_key)
 
     if not api_key:
@@ -115,10 +140,18 @@ def _call_gemini(prompt: str, config: LLMConfig) -> str:
         model=config.model,
         contents=prompt,
     )
-    return response.text or ""
+    usage = getattr(response, "usage_metadata", None)
+    return ProviderResponse(
+        text=response.text or "",
+        provider=config.provider,
+        requested_model=config.model,
+        actual_model=config.model,
+        input_tokens=getattr(usage, "prompt_token_count", None),
+        output_tokens=getattr(usage, "candidates_token_count", None),
+    )
 
 
-def _call_claude(prompt: str, config: LLMConfig) -> str:
+def _call_claude(prompt: str, config: LLMConfig) -> ProviderResponse:
     api_key = resolve_api_key(config.provider, config.api_key)
 
     if not api_key:
@@ -142,14 +175,19 @@ def _call_claude(prompt: str, config: LLMConfig) -> str:
     response.raise_for_status()
     payload = response.json()
     content = payload.get("content", [])
-    return "\n".join(
-        item.get("text", "")
-        for item in content
-        if item.get("type") == "text"
-    ).strip()
+    text = "\n".join(item.get("text", "") for item in content if item.get("type") == "text").strip()
+    usage = payload.get("usage") or {}
+    return ProviderResponse(
+        text=text,
+        provider=config.provider,
+        requested_model=config.model,
+        actual_model=str(payload.get("model") or config.model),
+        input_tokens=usage.get("input_tokens"),
+        output_tokens=usage.get("output_tokens"),
+    )
 
 
-def _call_openai(prompt: str, config: LLMConfig) -> str:
+def _call_openai(prompt: str, config: LLMConfig) -> ProviderResponse:
     api_key = resolve_api_key(config.provider, config.api_key)
 
     if not api_key:
@@ -170,19 +208,24 @@ def _call_openai(prompt: str, config: LLMConfig) -> str:
     response.raise_for_status()
     payload = response.json()
 
-    if payload.get("output_text"):
-        return payload["output_text"]
+    output_parts = [str(payload["output_text"])] if payload.get("output_text") else []
+    if not output_parts:
+        for item in payload.get("output", []):
+            for content in item.get("content", []):
+                if content.get("type") in ["output_text", "text"]:
+                    output_parts.append(content.get("text", ""))
+    usage = payload.get("usage") or {}
+    return ProviderResponse(
+        text="\n".join(output_parts).strip(),
+        provider=config.provider,
+        requested_model=config.model,
+        actual_model=str(payload.get("model") or config.model),
+        input_tokens=usage.get("input_tokens"),
+        output_tokens=usage.get("output_tokens"),
+    )
 
-    output_parts = []
-    for item in payload.get("output", []):
-        for content in item.get("content", []):
-            if content.get("type") in ["output_text", "text"]:
-                output_parts.append(content.get("text", ""))
 
-    return "\n".join(output_parts).strip()
-
-
-def _call_perplexity(prompt: str, config: LLMConfig) -> str:
+def _call_perplexity(prompt: str, config: LLMConfig) -> ProviderResponse:
     api_key = resolve_api_key(config.provider, config.api_key)
 
     if not api_key:
@@ -203,15 +246,21 @@ def _call_perplexity(prompt: str, config: LLMConfig) -> str:
     )
     response.raise_for_status()
     payload = response.json()
-    if payload.get("output_text"):
-        return str(payload["output_text"]).strip()
-
-    output_parts = []
-    for item in payload.get("output", []):
-        for content in item.get("content", []):
-            if content.get("type") in {"output_text", "text"}:
-                output_parts.append(str(content.get("text") or ""))
-    return "\n".join(output_parts).strip()
+    output_parts = [str(payload["output_text"])] if payload.get("output_text") else []
+    if not output_parts:
+        for item in payload.get("output", []):
+            for content in item.get("content", []):
+                if content.get("type") in {"output_text", "text"}:
+                    output_parts.append(str(content.get("text") or ""))
+    usage = payload.get("usage") or {}
+    return ProviderResponse(
+        text="\n".join(output_parts).strip(),
+        provider=config.provider,
+        requested_model=config.model,
+        actual_model=str(payload.get("model") or config.model),
+        input_tokens=usage.get("input_tokens"),
+        output_tokens=usage.get("output_tokens"),
+    )
 
 
 def _typed_provider_error(error: Exception, provider: str, model: str) -> ProviderError:
@@ -222,7 +271,9 @@ def _typed_provider_error(error: Exception, provider: str, model: str) -> Provid
     error_text = str(error).lower()
     details = {"provider": provider, "model": model}
 
-    if status_code in {401, 403} or any(signal in error_text for signal in ("invalid api key", "unauthorized", "authentication")):
+    if status_code in {401, 403} or any(
+        signal in error_text for signal in ("invalid api key", "unauthorized", "authentication")
+    ):
         return ProviderAuthenticationError(str(error), **details)
     if status_code == 429 or "rate limit" in error_text:
         return ProviderRateLimitError(str(error), **details)
@@ -237,7 +288,11 @@ def _typed_provider_error(error: Exception, provider: str, model: str) -> Provid
     return ProviderError(str(error), **details)
 
 
-def call_llm_with_retry(prompt: str, config: LLMConfig) -> str:
+def call_llm_with_retry(
+    prompt: str,
+    config: LLMConfig,
+    include_usage: bool = False,
+) -> str | ProviderResponse:
     provider = config.provider if config.provider in PROVIDER_MODELS else "Gemini"
     models = [config.model] if config.model else models_for_provider(provider)
 
@@ -272,12 +327,30 @@ def call_llm_with_retry(prompt: str, config: LLMConfig) -> str:
                     prompt_chars=len(prompt),
                 ):
                     if provider == "Claude":
-                        return _call_claude(prompt, active_config)
-                    if provider == "OpenAI":
-                        return _call_openai(prompt, active_config)
-                    if provider == "Perplexity":
-                        return _call_perplexity(prompt, active_config)
-                    return _call_gemini(prompt, active_config)
+                        response = _call_claude(prompt, active_config)
+                    elif provider == "OpenAI":
+                        response = _call_openai(prompt, active_config)
+                    elif provider == "Perplexity":
+                        response = _call_perplexity(prompt, active_config)
+                    else:
+                        response = _call_gemini(prompt, active_config)
+                    if isinstance(response, str):
+                        response = ProviderResponse(
+                            text=response,
+                            provider=provider,
+                            requested_model=config.model,
+                            actual_model=model,
+                        )
+                    elif response.requested_model != config.model:
+                        response = ProviderResponse(
+                            text=response.text,
+                            provider=response.provider,
+                            requested_model=config.model,
+                            actual_model=response.actual_model,
+                            input_tokens=response.input_tokens,
+                            output_tokens=response.output_tokens,
+                        )
+                    return response if include_usage else response.text
 
             except Exception as exc:
                 typed_error = _typed_provider_error(exc, provider, model)
@@ -315,5 +388,7 @@ def call_llm_with_retry(prompt: str, config: LLMConfig) -> str:
                 time.sleep(wait_seconds)
 
     if last_error is None:
-        raise ProviderUnavailableError("No provider model could be called.", provider=provider, model=config.model)
+        raise ProviderUnavailableError(
+            "No provider model could be called.", provider=provider, model=config.model
+        )
     raise last_error

@@ -23,7 +23,7 @@ export default function HomePage() {
 
         <div className="product-preview" aria-label="TruthFit analysis preview">
           <div className="preview-header">
-            <span className="pill">Evidence-based match</span>
+            <span className="pill">Sample match</span>
             <strong>78/100</strong>
           </div>
           <div className="score-ring">
@@ -52,14 +52,14 @@ export default function HomePage() {
               </p>
             </div>
           </div>
-          <div className="preview-footer">Personal details redacted before provider analysis.</div>
+          <div className="preview-footer">Detected personal details are redacted before provider analysis.</div>
         </div>
       </section>
 
       <section className="section grid three">
         <Link className="card" href="/jobs">
           <span className="section-label">Step 1</span>
-          <h3>Upload safely</h3>
+          <h3>Review the redacted resume</h3>
           <p className="muted">Parse your resume and review a redacted preview before analysis.</p>
         </Link>
         <Link className="card" href="/jobs">

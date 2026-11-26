@@ -10,9 +10,9 @@
 | Streamlit v1 | **Legacy public demo** | Portfolio-safe sample workflow, report views, export, chat, and local tracker during the product deployment transition. |
 | Next.js + FastAPI | **Local product; not publicly hosted yet** | Authenticated accounts, persisted reviews, privacy controls, background analysis, and database-backed tracking. |
 
-TruthFit Resume AI is an evidence-grounded resume and job-fit review product. It compares a resume against a specific job description, explains the match score, checks whether important claims are backed by real evidence, and turns gaps into practical resume improvements and application actions.
+TruthFit compares a resume with a job description. It explains the match score, shows which requirements have supporting evidence, and suggests resume edits and next steps.
 
-The goal is not to "game" an ATS or invent stronger experience. TruthFit is built around a simple idea: a resume should be tailored only with evidence that already exists in the candidate's work, projects, education, or portfolio.
+Suggested edits must stay grounded in the candidate's existing work, projects, education, or portfolio. Missing evidence is flagged for review.
 
 The repository currently contains two interfaces:
 
@@ -21,7 +21,7 @@ The repository currently contains two interfaces:
 
 ## Current Product Status
 
-The first seven security and reliability phases of the Next.js/FastAPI product path are complete:
+The following security and reliability features are implemented. Hosted deployment and live-service verification remain separate release checks:
 
 | Phase | Status | Delivered |
 | --- | --- | --- |
